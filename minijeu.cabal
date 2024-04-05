@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f60d16a6847ac6552c3d7b57e53ec5b8f8d22520ac7fc018619bfe373444f096
+-- hash: 1aa1556a23b568b541e21a8b618be7853e5d0aaa0b27e1d4241a10d954a60162
 
 name:           minijeu
 version:        0.1.0.0
@@ -30,6 +30,7 @@ library
       Keyboard
       Model
       Mouse
+      SimCity
       Sprite
       SpriteMap
       TextureMap

@@ -31,7 +31,7 @@ moveDown :: GameState -> GameState
 moveDown (GameState px py sp) = (GameState px (py + sp) sp)
 
 click :: MyMouse -> GameState -> Integer -> Integer -> GameState
-click mse gstate width height = TODO
+click mse gstate width height = undefined
 
 
 
