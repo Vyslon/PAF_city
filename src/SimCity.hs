@@ -8,6 +8,12 @@ data Forme = HSegment Coord Int
     | VSegment Coord Int
     | Rectangle Coord Int Int
 
+instance Eq Forme where
+    (HSegment (C x1 y1) n1) == (HSegment (C x2 y2) n2) = x1 == x2 && y1 == y2 && n1 == n2
+    (VSegment (C x1 y1) n1) == (VSegment (C x2 y2) n2) = x1 == x2 && y1 == y2 && n1 == n2
+    (Rectangle (C x1 y1) n1 p1) == (Rectangle (C x2 y2) n2 p2) = x1 == x2 && y1 == y2 && n1 == n2 && p1 == p2
+    _ == _ = False
+
 -- (nord, sud, ouest, est)
 limites::Forme -> (Int, Int, Int, Int)
 limites (HSegment (C x y) longueur) = (y, y, x, x + longueur)
@@ -71,6 +77,15 @@ data Zone = Eau Forme
     | ZC Forme [Batiment] 
     | Admin Forme Batiment
 
+instance Eq Zone where -- TODO : vérifir que la liste batiment est la même, créer une fonction pour ça
+    (Eau f1) == (Eau f2) = f1 == f2
+    (Route f1) == (Route f2) = f1 == f2
+    (ZR f1 _) == (ZR f2 _) = f1 == f2
+    (ZI f1 _) == (ZI f2 _) = f1 == f2
+    (ZC f1 _) == (ZC f2 _) = f1 == f2
+    (Admin f1 _) == (Admin f2 _) = f1 == f2
+    _ == _ = False
+
 data Occupation = Travaille
   | Dors
   | FaisLesCourses
@@ -96,10 +111,13 @@ data Ville = V { viZones :: Map.Map ZoneId Zone, viCit :: Map.Map CitId Citoyen 
 -- jour).
 
 -- TODO : Question 1.3
+-- TODO : 3 invariants, 1 pour chaque condition
 prop_ville_sansCollision::Ville -> Bool
 prop_ville_sansCollision = undefined
+-- TODO : prop_ville_sansCollision v = prop_zones_disjointes v && prop_ZRCI_adjacent_route v && routes_connexes v
 
 -- TODO : Question 1.4 : Ecrire un invariant pour Ville.
+-- TODO : tous les citoyens ont une résidence ?
 
 construit::Ville -> Zone -> Ville
 construit (V zones cit) z = (V (Map.insert (ZoneId (Map.size zones)) z zones) cit)
@@ -108,10 +126,10 @@ construit (V zones cit) z = (V (Map.insert (ZoneId (Map.size zones)) z zones) ci
 pre_construit::Ville -> Zone -> Bool
 pre_construit = undefined
 
--- TODO : Question 1.7
--- Plutôt facile mais je connais pas la syntaxe : vérifier que le map a vu sa taille augmentée de 1 et que la zone
--- est présente dans le map
-post_construit::Ville -> Zone -> Bool
-post_construit = undefined
+post_construit::Ville -> Zone -> Ville -> Bool
+post_construit villeAvant zone villeApres = (zonePresente (viZones villeApres) zone) && (Map.size (viZones villeApres) == Map.size (viZones villeAvant) + 1)
+
+zonePresente::Map.Map ZoneId Zone -> Zone -> Bool
+zonePresente map zoneATrouver =  any (== zoneATrouver) (Map.elems map)
 
 -- TODO : ER1 à partir de la Question 1.8
