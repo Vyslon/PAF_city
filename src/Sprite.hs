@@ -1,21 +1,18 @@
 module Sprite where
 
+import SDL (Renderer, V4(..), Rectangle(..))
+import qualified SDL
 import Control.Monad.IO.Class (MonadIO)
-
 import Foreign.C.Types (CInt)
-
-import Data.Sequence (Seq (..))
+import Data.Sequence (Seq(..))
 import qualified Data.Sequence as Seq
-
-import SDL.Vect (V2 (..), Point (..))
-
-import SDL.Video.Renderer (Renderer, Texture, Rectangle (..))
+import SDL.Vect (V2(..), Point(..), V4(..))
+import SDL.Video.Renderer (Renderer, Texture, Rectangle(..))
 import qualified SDL.Video.Renderer as R
-
 import TextureMap (TextureMap, TextureId)
 import qualified TextureMap as TM
-
-import qualified Debug.Trace as T
+import Data.Word (Word8)  -- Correct import for Word8
+import qualified SimCity as Sim -- Assuming Zone is defined in Model.hs
 
 
 type Area = Rectangle CInt
@@ -90,3 +87,30 @@ displaySprite rdr tmap sp@(Sprite imgs cur dest) =
     (Image tid src) -> do
       let txt = TM.fetchTexture tid tmap
       R.copy rdr txt Nothing (Just dest)
+
+
+-- Extraire la hauteur d'un Rectangle
+rectH :: Rectangle CInt -> CInt
+rectH (Rectangle _ (V2 _ h)) = h
+
+-- Extraire la largeur d'un Rectangle
+rectW :: Rectangle CInt -> CInt
+rectW (Rectangle _ (V2 w _)) = w
+
+
+-- Function to create and display a colored rectangle on the screen
+createColoredSprite :: Renderer -> V4 Word8 -> Rectangle CInt -> IO ()
+createColoredSprite renderer color area = do
+    SDL.rendererDrawColor renderer SDL.$= color  -- Set the drawing color
+    SDL.fillRect renderer (Just area)  -- Draw the filled rectangle
+
+
+
+zoneColor :: Sim.Zone -> V4 Word8
+zoneColor (Sim.ZR _ _) = V4 255 0 0 255     -- Red for residential areas
+zoneColor (Sim.ZI _ _) = V4 0 255 0 255     -- Green for industrial areas
+zoneColor (Sim.ZC _ _) = V4 0 0 255 255     -- Blue for commercial areas
+zoneColor (Sim.Route _) = V4 128 128 128 255 -- Grey for roads
+zoneColor (Sim.Eau _) = V4 0 0 128 255      -- Dark blue for water bodies
+zoneColor (Sim.Admin _ _) = V4 255 255 0 255 -- Yellow for administrative buildings
+
