@@ -119,3 +119,5 @@ askForBuildingDetails x y = do
         _ -> do
             putStrLn "Choix non valide, veuillez réessayer."
             askForBuildingDetails x y
+
+--test github bb
