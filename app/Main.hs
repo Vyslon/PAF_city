@@ -1,13 +1,13 @@
 module Main where
 
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import Control.Concurrent (threadDelay)
-import Data.Text (pack)  -- Import the pack function from Data.Text
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.List (foldl')
 import Foreign.C.Types (CInt(..))
 import SDL
+import SDL.Font as TTF  -- Corrected import for SDL.Font
 import SDL.Time (time, delay)
 import Linear (V4(..))
 import TextureMap (TextureMap, TextureId(..))
@@ -24,11 +24,19 @@ import Model (GameState)
 import qualified Model as M
 import qualified Data.Map as Map
 import qualified SimCity as Sim
+import Data.Text (pack)
 
--- Function to convert Forme to SDL Area
-formeToArea :: Sim.Forme -> S.Area
-formeToArea (Sim.Rectangle (Sim.C x y) w h) = S.mkArea (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
-formeToArea _ = error "Unsupported Forme type for conversion to Area"
+-- Initialization of all systems
+initializeSDL :: IO ()
+initializeSDL = do
+    SDL.initialize [SDL.InitVideo]
+    Font.initialize  -- Assuming Font has an initialize function
+
+cleanupSDL :: IO ()
+cleanupSDL = do
+    Font.quit  -- Assuming Font has a quit function
+    SDL.quit
+
 
 -- Function to draw all zones
 drawZones :: Renderer -> [Sim.Zone] -> IO ()
@@ -38,62 +46,52 @@ drawZone :: Renderer -> Sim.Zone -> IO ()
 drawZone renderer zone = do
     let color = S.zoneColor zone  -- Assuming zoneColor is a function defined in Sprite.hs
     let area = formeToArea (Sim.zoneForme zone)
-    S.createColoredSprite renderer color area
+    S.createColoredSprite renderer color area  -- Adjust if needed
 
--- Load background image
-loadBackground :: Renderer -> FilePath -> TextureMap -> SpriteMap -> IO (TextureMap, SpriteMap)
-loadBackground rdr path tmap smap = do
-    tmap' <- TM.loadTexture rdr path (TextureId "background") tmap
-    let sprite = S.defaultScale $ S.addImage S.createEmptySprite $ S.createImage (TextureId "background") (S.mkArea 0 0 640 480)
-    let smap' = SM.addSprite (SpriteId "background") sprite smap
-    return (tmap', smap')
+drawBuilding :: Renderer -> TextureMap -> Sim.Batiment -> IO ()
+drawBuilding renderer tmap building = do
+    let forme = Sim.getForme building
+    let textureId = getTextureIdForBuilding building
+    let texture = TM.fetchTexture textureId tmap
+    let area = formeToArea forme
+    SDL.copy renderer texture Nothing (Just area)  -- Use SDL.copy to render the texture
 
--- Load character sprite
-loadPerso :: Renderer -> FilePath -> TextureMap -> SpriteMap -> IO (TextureMap, SpriteMap)
-loadPerso rdr path tmap smap = do
-    tmap' <- TM.loadTexture rdr path (TextureId "perso") tmap
-    let sprite = S.defaultScale $ S.addImage S.createEmptySprite $ S.createImage (TextureId "perso") (S.mkArea 0 0 200 200)
-    let smap' = SM.addSprite (SpriteId "perso") sprite smap
-    return (tmap', smap')
+displayMoney :: Renderer -> Font.Font -> Int -> IO ()
+displayMoney renderer font money = do
+    let color = V4 255 255 255 255
+    textSurface <- Font.renderTextSolid font (pack $ show money ++ " €") color  -- Assuming there's a correct function
+    texture <- SDL.createTextureFromSurface renderer textSurface
+    SDL.freeSurface textSurface
+    texInfo <- SDL.queryTexture texture
+    let dstRect = Just $ SDL.Rectangle (SDL.P (V2 10 10)) (V2 (SDL.textureWidth texInfo) (SDL.textureHeight texInfo))
+    SDL.copy renderer texture Nothing dstRect
+    SDL.destroyTexture texture
 
 -- Main game loop
-gameLoop :: (RealFrac a, Show a) => a -> Renderer -> TextureMap -> SpriteMap -> Keyboard -> GameState -> [Sim.Zone] -> IO ()
-gameLoop frameRate renderer tmap smap kbd gameState zones = do
+gameLoop :: (RealFrac a, Show a) => a -> Renderer -> TextureMap -> SpriteMap -> Keyboard -> GameState -> Sim.Ville -> TTF.Font -> Int -> IO ()
+gameLoop frameRate renderer tmap smap kbd gameState ville font argent = do
     startTime <- time
     events <- pollEvents
     let kbd' = K.handleEvents events kbd
-    let mse = MS.handleEventsMousePos events (MS.MyMouse False (-1) (-1))
+    let mouseState = MS.handleEventsMousePos events (MS.MyMouse False (-1) (-1))
     clear renderer
-    -- Draw background
     S.displaySprite renderer tmap (SM.fetchSprite (SpriteId "background") smap)
-    -- Draw character
-    --S.displaySprite renderer tmap (S.moveTo (SM.fetchSprite (SpriteId "perso") smap)
-      --                              (fromIntegral (M.persoX gameState))
-        --                            (fromIntegral (M.persoY gameState)))
-    -- Draw zones
-    drawZones renderer zones
+    displayMoney renderer font argent  -- Display money
     present renderer
     endTime <- time
-    let refreshTime = endTime - startTime
-    let delayTime = floor (((1.0 / frameRate) - refreshTime) * 1000)
-    threadDelay $ delayTime * 1000 -- microseconds
-    let deltaTime = endTime - startTime
-    unless (K.keypressed KeycodeEscape kbd') (gameLoop frameRate renderer tmap smap kbd' gameState zones)
+    unless (K.keyPressed KeycodeEscape kbd') $ gameLoop frameRate renderer tmap smap kbd' gameState ville font (argent + 1)  -- Increment money for demonstration
 
--- Main function to setup the game
 main :: IO ()
 main = do
-  initializeAll
-  window <- createWindow (pack "Minijeu") $ defaultWindow { windowInitialSize = V2 640 480 }
-  renderer <- createRenderer window (-1) defaultRenderer
-  -- Load background and character sprites
-  (tmap, smap) <- loadBackground renderer "assets/background.bmp" TM.createTextureMap SM.createSpriteMap
-  (tmap', smap') <- loadPerso renderer "assets/perso.bmp" tmap smap
-  -- Initialize game state and keyboard
-  let gameState = M.initGameState
-  let kbd = K.createKeyboard
-  -- Create a sample list of zones for testing
-  let zones = [Sim.ZR (Sim.Rectangle (Sim.C 100 150) 300 200) [],Sim.ZI (Sim.Rectangle (Sim.C 500 150) 300 200) [],Sim.ZC (Sim.Rectangle (Sim.C 100 400) 300 200) [],Sim.Route (Sim.Rectangle (Sim.C 0 100) 300 50),Sim.Eau (Sim.Rectangle (Sim.C 0 550) 900 50),Sim.Admin (Sim.Rectangle (Sim.C 400 400) 100 100) (Sim.Commissariat (Sim.Rectangle (Sim.C 400 400) 100 100) (Sim.C 400 400))]
-
-  -- Launch the game loop with zones
-  gameLoop 60 renderer tmap' smap' kbd gameState zones
+    initializeSDL
+    window <- SDL.createWindow (pack "Minijeu") $ SDL.defaultWindow { SDL.windowInitialSize = V2 800 800 }
+    renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
+    font <- Font.load "assets/Roboto.ttf" 24  -- Check Font for correct function to load fonts
+    tmap <- loadBuildingTextures renderer TM.createTextureMap
+    smap <- loadSprites renderer tmap SM.createSpriteMap
+    let kbd = K.createKeyState
+    let ville = Sim.createInitialVille
+    let argent = 0
+    gameLoop 60 renderer tmap smap kbd ville font argent
+    Font.free font  -- Check Font for correct function to free fonts
+    cleanupSDL

@@ -1,65 +1,49 @@
-
 module Keyboard where
 
 import SDL
-
-import Data.List (foldl')
-
 import Data.Set (Set)
-import qualified Data.Set as S
+import qualified Data.Set as Set
+import Data.List (foldl')
 
 type Keyboard = Set Keycode
 
--- | création de la structure d'état de clavier (vide)
-createKeyboard :: Keyboard
-createKeyboard = S.empty
+data KeyState = KeyState {
+    keyboard :: Keyboard,
+    keyRWasReleased :: Bool
+}
 
-handleEvent :: Event -> Keyboard -> Keyboard
-handleEvent event kbd =
+createKeyState :: KeyState
+createKeyState = KeyState {
+    keyboard = Set.empty,
+    keyRWasReleased = True
+}
+
+handleKeyEvent :: Event -> KeyState -> KeyState
+handleKeyEvent event keyState =
   case eventPayload event of
     KeyboardEvent keyboardEvent ->
-      if keyboardEventKeyMotion keyboardEvent == Pressed
-      then S.insert (keysymKeycode (keyboardEventKeysym keyboardEvent)) kbd
-      else if keyboardEventKeyMotion keyboardEvent == Released
-           then S.delete (keysymKeycode (keyboardEventKeysym keyboardEvent)) kbd
-           else kbd
-    _ -> kbd
+      let keycode = keysymKeycode (keyboardEventKeysym keyboardEvent)
+          motion = keyboardEventKeyMotion keyboardEvent
+          keyStateUpdated = updateKeyState keycode motion keyState
+      in keyStateUpdated
+    _ -> keyState
 
--- | prise en compte des événements SDL2 pour mettre à jour l'état du clavier
-handleEvents :: [Event] -> Keyboard -> Keyboard
-handleEvents events kbd = foldl' (flip handleEvent) kbd events
+updateKeyState :: Keycode -> InputMotion -> KeyState -> KeyState
+updateKeyState keycode motion keyState =
+    case motion of
+        Pressed -> keyState { keyboard = Set.insert keycode (keyboard keyState) }
+        Released -> keyState {
+            keyboard = Set.delete keycode (keyboard keyState),
+            keyRWasReleased = if keycode == KeycodeR then True else keyRWasReleased keyState
+        }
 
--- | quelques noms de *keycode*
-keycodeName :: Keycode -> Char
-keycodeName KeycodeA = 'a'
-keycodeName KeycodeB = 'b'
-keycodeName KeycodeC = 'c'
-keycodeName KeycodeD = 'd'
-keycodeName KeycodeE = 'e'
-keycodeName KeycodeF = 'f'
-keycodeName KeycodeG = 'g'
-keycodeName KeycodeH = 'h'
-keycodeName KeycodeI = 'i'
-keycodeName KeycodeJ = 'j'
-keycodeName KeycodeK = 'k'
-keycodeName KeycodeL = 'l'
-keycodeName KeycodeM = 'm'
-keycodeName KeycodeN = 'n'
-keycodeName KeycodeO = 'o'
-keycodeName KeycodeP = 'p'
-keycodeName KeycodeQ = 'q'
-keycodeName KeycodeR = 'r'
-keycodeName KeycodeS = 's'
-keycodeName KeycodeT = 't'
-keycodeName KeycodeU = 'u'
-keycodeName KeycodeV = 'v'
-keycodeName KeycodeW = 'w'
-keycodeName KeycodeX = 'x'
-keycodeName KeycodeY = 'y'
-keycodeName KeycodeZ = 'z'
-keycodeName _ = '-'
+handleEvents :: [Event] -> KeyState -> KeyState
+handleEvents events keyState = foldl' (flip handleKeyEvent) keyState events
 
--- | Vérifies sir le *keycode* spécificé est actuellement
--- | actif sur le clavier.
-keypressed :: Keycode -> Keyboard -> Bool
-keypressed kc kbd = S.member kc kbd
+triggerRAction :: KeyState -> Bool
+triggerRAction keyState =
+    Set.member KeycodeR (keyboard keyState) && keyRWasReleased keyState
+
+-- Updated to use KeyState
+keyPressed :: Keycode -> KeyState -> Bool
+keyPressed kc keyState = Set.member kc (keyboard keyState)

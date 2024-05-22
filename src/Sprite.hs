@@ -13,6 +13,7 @@ import TextureMap (TextureMap, TextureId)
 import qualified TextureMap as TM
 import Data.Word (Word8)  -- Correct import for Word8
 import qualified SimCity as Sim -- Assuming Zone is defined in Model.hs
+import System.IO (hFlush, stdout)
 
 
 type Area = Rectangle CInt
@@ -89,13 +90,13 @@ displaySprite rdr tmap sp@(Sprite imgs cur dest) =
       R.copy rdr txt Nothing (Just dest)
 
 
--- Extraire la hauteur d'un Rectangle
-rectH :: Rectangle CInt -> CInt
-rectH (Rectangle _ (V2 _ h)) = h
-
--- Extraire la largeur d'un Rectangle
-rectW :: Rectangle CInt -> CInt
-rectW (Rectangle _ (V2 w _)) = w
+zoneColor :: Sim.Zone -> V4 Word8
+zoneColor (Sim.ZR _ _) = V4 255 0 0 255     -- Red for residential areas
+zoneColor (Sim.ZI _ _) = V4 0 255 0 255     -- Green for industrial areas
+zoneColor (Sim.ZC _ _) = V4 0 0 255 255     -- Blue for commercial areas
+zoneColor (Sim.Route _) = V4 128 128 128 255 -- Grey for roads
+zoneColor (Sim.Eau _) = V4 0 0 128 255      -- Dark blue for water bodies
+zoneColor (Sim.Admin _ _) = V4 255 255 0 255 -- Yellow for administrative buildings
 
 
 -- Function to create and display a colored rectangle on the screen
@@ -106,11 +107,28 @@ createColoredSprite renderer color area = do
 
 
 
-zoneColor :: Sim.Zone -> V4 Word8
-zoneColor (Sim.ZR _ _) = V4 255 0 0 255     -- Red for residential areas
-zoneColor (Sim.ZI _ _) = V4 0 255 0 255     -- Green for industrial areas
-zoneColor (Sim.ZC _ _) = V4 0 0 255 255     -- Blue for commercial areas
-zoneColor (Sim.Route _) = V4 128 128 128 255 -- Grey for roads
-zoneColor (Sim.Eau _) = V4 0 0 128 255      -- Dark blue for water bodies
-zoneColor (Sim.Admin _ _) = V4 255 255 0 255 -- Yellow for administrative buildings
-
+askForBuildingDetails :: Int -> Int -> IO Sim.Batiment
+askForBuildingDetails x y = do
+    putStrLn "\nChoisissez un type de bâtiment:"
+    putStrLn "1. Cabane"
+    putStrLn "2. Atelier"
+    putStrLn "3. Épicerie"
+    putStrLn "4. Commissariat"
+    putStr "Votre choix: "
+    hFlush stdout
+    choice <- getLine
+    putStrLn "Entrez la largeur du bâtiment:"
+    widthStr <- getLine
+    putStrLn "Entrez la longueur du bâtiment:"
+    heightStr <- getLine
+    let width = read widthStr :: Int
+    let height = read heightStr :: Int
+    let coord = Sim.C x y
+    case choice of
+        "1" -> return $ Sim.Cabane (Sim.Rectangle coord width height) coord 5 []  -- Assumons une capacité fixe pour simplifier
+        "2" -> return $ Sim.Atelier (Sim.Rectangle coord width height) coord 5 []
+        "3" -> return $ Sim.Epicerie (Sim.Rectangle coord width height) coord 5 []
+        "4" -> return $ Sim.Commissariat (Sim.Rectangle coord width height) coord
+        _ -> do
+            putStrLn "Choix non valide, veuillez réessayer."
+            askForBuildingDetails x y   
