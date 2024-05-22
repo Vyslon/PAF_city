@@ -1,6 +1,7 @@
 module SimCity where
 
 import qualified Data.Map as Map
+import Data.List (find)
 
 data Coord = C {cx :: Int, cy :: Int} deriving (Show , Eq)
 
@@ -96,13 +97,13 @@ adjacentes forme1 forme2 = nonChevauchement && (horizontalementAdjacente || vert
 
 
 newtype ZoneId = ZoneId Int deriving (Eq, Ord)
-newtype BatId = BatId Int 
+newtype BatId = BatId Int deriving (Eq, Show)
 newtype CitId = CitId String deriving (Eq, Ord)
 
-data Batiment = Cabane Forme Coord Int [CitId] 
-    | Atelier Forme Coord Int [CitId]
-    | Epicerie Forme Coord Int [CitId] 
-    | Commissariat Forme Coord
+data Batiment = Cabane Forme Coord Int [CitId] BatId
+    | Atelier Forme Coord Int [CitId] BatId
+    | Epicerie Forme Coord Int [CitId] BatId
+    | Commissariat Forme Coord BatId
 
 data Zone = Eau Forme
     | Route Forme
@@ -217,16 +218,16 @@ zonePresente map zoneATrouver =  any (== zoneATrouver) (Map.elems map)
 
 
 getEntry :: Batiment -> Coord
-getEntry (Cabane _ c _ _  ) = c
-getEntry (Atelier _ c _ _  ) = c
-getEntry (Epicerie _ c _ _  ) = c
-getEntry (Commissariat _ c )= c 
+getEntry (Cabane _ c _ _  _) = c
+getEntry (Atelier _ c _ _ _ ) = c
+getEntry (Epicerie _ c _ _  _) = c
+getEntry (Commissariat _ c _ )= c 
 
 getForme :: Batiment -> Forme
-getForme (Cabane forme _ _ _  ) = forme
-getForme (Atelier forme _ _ _  ) = forme
-getForme (Epicerie forme _ _ _  ) = forme
-getForme (Commissariat forme _ )= forme
+getForme (Cabane forme _ _ _  _ ) = forme
+getForme (Atelier forme _ _ _ _  ) = forme
+getForme (Epicerie forme _ _ _ _  ) = forme
+getForme (Commissariat forme _ _ )= forme
 
 prop_verifyEntry::Batiment -> Bool
 prop_verifyEntry batiment = adjacent (getEntry batiment) (getForme batiment) 
@@ -235,17 +236,17 @@ prop_verifyEntry batiment = adjacent (getEntry batiment) (getForme batiment)
 
 
 getOccupants::Batiment -> Int 
-getOccupants (Cabane _ _ n _) = n 
-getOccupants (Atelier _ _ n _) = n 
-getOccupants (Epicerie _ _ n _) = n 
-getOccupants (Commissariat _ _) = 0
+getOccupants (Cabane _ _ n _ _ ) = n 
+getOccupants (Atelier _ _ n _ _) = n 
+getOccupants (Epicerie _ _ n _ _) = n 
+getOccupants (Commissariat _ _ _) = 0
 
 
 verifyIntLessThanListLength :: Batiment -> Bool
-verifyIntLessThanListLength (Cabane _ _ n citIds) = n <= length citIds
-verifyIntLessThanListLength (Atelier _ _ n citIds) = n <= length citIds
-verifyIntLessThanListLength (Epicerie _ _ n citIds) = n <= length citIds
-verifyIntLessThanListLength (Commissariat _ _) = True
+verifyIntLessThanListLength (Cabane _ _ n citIds _) = n <= length citIds
+verifyIntLessThanListLength (Atelier _ _ n citIds _) = n <= length citIds
+verifyIntLessThanListLength (Epicerie _ _ n citIds _) = n <= length citIds
+verifyIntLessThanListLength (Commissariat _ _ _) = True
 
 
 sous_fonction_entry_appart_route::Coord -> Ville -> Bool
@@ -273,10 +274,10 @@ prop_entry_appartient_route ville = all (\bldg -> sous_fonction_entry_appart_rou
 
 --Verifier que le batiment appartient a la bonne zone, bon en sah clc mais possible
 buildingInCorrectZone :: Batiment -> Zone -> Bool
-buildingInCorrectZone (Cabane _ _ _ _) (ZR _ _ )  = True
-buildingInCorrectZone (Atelier _ _ _ _) (ZI _ _ ) = True
-buildingInCorrectZone (Epicerie _ _ _ _) (ZC _ _ ) = True
-buildingInCorrectZone (Commissariat _ _) (Admin _ _ ) = True  -- Commissariats can be in any zone
+buildingInCorrectZone (Cabane _ _ _ _ _) (ZR _ _ )  = True
+buildingInCorrectZone (Atelier _ _ _ _ _) (ZI _ _ ) = True
+buildingInCorrectZone (Epicerie _ _ _ _ _) (ZC _ _ ) = True
+buildingInCorrectZone (Commissariat _ _ _) (Admin _ _ ) = True  -- Commissariats can be in any zone
 buildingInCorrectZone _ _ = False  -- Default case if none match
 
 -- Iterate over each zone in the city, and check every building in those zones
@@ -438,3 +439,64 @@ sommeArgentCitoyens ville = sum [argent | citoyen <- Map.elems (viCit ville), le
     getCitoyenMoney (Habitant _ (m, _, _) (_,_,_) _) = m
     getCitoyenMoney _ = 0
 
+calculateMoney :: Ville -> Int
+calculateMoney ville = foldr (+) 0 $ map moneyFromZone (Map.elems $ viZones ville)
+
+-- Calculer l'argent d'une zone spécifique
+moneyFromZone :: Zone -> Int
+moneyFromZone zone = sum $ map moneyFromBuilding (buildingsFromZone zone)
+
+-- Calculer l'argent d'un bâtiment
+moneyFromBuilding :: Batiment -> Int
+moneyFromBuilding (Epicerie (Rectangle _ w h) _ _ _ _) = w * h
+moneyFromBuilding (Cabane _ _ n _ _) = 20 * n
+moneyFromBuilding (Atelier (Rectangle _ w h) _ _ _ _) = w * h  -- Si vous souhaitez également accumuler de l'argent pour les ateliers
+moneyFromBuilding _ = 0  -- Pour tous les autres types ou formes non gérées
+
+-- Convertit un immigrant en habitant et l'ajoute à une cabane si possible
+addImmigrantToCabane :: CitId -> BatId -> Ville -> Maybe Ville
+addImmigrantToCabane citId batId ville =
+    case Map.lookup citId (viCit ville) of
+        Just (Immigrant coord info occupation) -> -- Seulement traiter si c'est un immigrant
+            case findCabane batId ville of
+                Just (Cabane forme cabCoord capacite residents batId) | length residents < capacite ->
+                    let newResidents = residents ++ [citId]
+                        updatedCabane = Cabane forme cabCoord capacite newResidents batId
+                        newVille = updateVilleWithCabane batId updatedCabane ville
+                        newCitoyen = Habitant coord info (batId, Nothing, Nothing) occupation
+                        updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
+                    in Just newVille { viCit = updatedCitoyens }
+                _ -> Nothing -- Soit le bâtiment n'est pas une cabane, soit il est plein
+        _ -> Nothing -- Pas un immigrant ou CitId non trouvé
+
+
+-- Trouve une cabane par BatId dans la ville
+findCabane :: BatId -> Ville -> Maybe Batiment
+findCabane batId ville = 
+    let zones = Map.elems (viZones ville)
+        buildings = concatMap buildingsFromZone zones  -- Appliquer buildingsFromZone à chaque zone
+    in find (\b -> getBatId b == Just batId && isCabane b) buildings
+
+
+isCabane :: Batiment -> Bool
+isCabane (Cabane _ _ _ _ _) = True
+isCabane _ = False
+
+getBatId :: Batiment -> Maybe BatId
+getBatId (Cabane _ _ _ _ id) = Just id
+getBatId _ = Nothing
+
+
+updateVilleWithCabane :: BatId -> Batiment -> Ville -> Ville
+updateVilleWithCabane batId cabane ville = 
+    let updatedZones = Map.map (updateZoneWithCabane batId cabane) (viZones ville)
+    in ville { viZones = updatedZones }
+
+-- Met à jour la zone avec la nouvelle cabane
+updateZoneWithCabane :: BatId -> Batiment -> Zone -> Zone
+updateZoneWithCabane batId cabane zone = case zone of
+    ZR forme batiments -> ZR forme (cabane : batiments)  -- Ajoute la cabane à la liste existante des bâtiments
+    ZI forme batiments -> ZI forme batiments             -- Garde les autres types de zones inchangées
+    ZC forme batiments -> ZC forme batiments
+    Admin forme batiment -> Admin forme batiment
+    _ -> zone  -- Pour Eau et Route, ou toute autre zone non modifiable pour les bâtiments

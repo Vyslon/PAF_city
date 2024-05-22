@@ -104,31 +104,3 @@ createColoredSprite :: Renderer -> V4 Word8 -> Rectangle CInt -> IO ()
 createColoredSprite renderer color area = do
     SDL.rendererDrawColor renderer SDL.$= color  -- Set the drawing color
     SDL.fillRect renderer (Just area)  -- Draw the filled rectangle
-
-
-
-askForBuildingDetails :: Int -> Int -> IO Sim.Batiment
-askForBuildingDetails x y = do
-    putStrLn "\nChoisissez un type de bâtiment:"
-    putStrLn "1. Cabane"
-    putStrLn "2. Atelier"
-    putStrLn "3. Épicerie"
-    putStrLn "4. Commissariat"
-    putStr "Votre choix: "
-    hFlush stdout
-    choice <- getLine
-    putStrLn "Entrez la largeur du bâtiment:"
-    widthStr <- getLine
-    putStrLn "Entrez la longueur du bâtiment:"
-    heightStr <- getLine
-    let width = read widthStr :: Int
-    let height = read heightStr :: Int
-    let coord = Sim.C x y
-    case choice of
-        "1" -> return $ Sim.Cabane (Sim.Rectangle coord width height) coord 5 []  -- Assumons une capacité fixe pour simplifier
-        "2" -> return $ Sim.Atelier (Sim.Rectangle coord width height) coord 5 []
-        "3" -> return $ Sim.Epicerie (Sim.Rectangle coord width height) coord 5 []
-        "4" -> return $ Sim.Commissariat (Sim.Rectangle coord width height) coord
-        _ -> do
-            putStrLn "Choix non valide, veuillez réessayer."
-            askForBuildingDetails x y   

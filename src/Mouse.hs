@@ -112,10 +112,10 @@ askForBuildingDetails x y = do
     let height = read heightStr :: Int
     let coord = Sim.C x y
     case choice of
-        "1" -> return $ Sim.Cabane (Sim.Rectangle coord width height) coord 5 []  -- Assumons une capacité fixe pour simplifier
-        "2" -> return $ Sim.Atelier (Sim.Rectangle coord width height) coord 5 []
-        "3" -> return $ Sim.Epicerie (Sim.Rectangle coord width height) coord 5 []
-        "4" -> return $ Sim.Commissariat (Sim.Rectangle coord width height) coord
+        "1" -> return $ Sim.Cabane (Sim.Rectangle coord width height) coord 5 [] (Sim.BatId 1 ) -- Assumons une capacité fixe pour simplifier
+        "2" -> return $ Sim.Atelier (Sim.Rectangle coord width height) coord 5 [] (Sim.BatId 2)
+        "3" -> return $ Sim.Epicerie (Sim.Rectangle coord width height) coord 5 [] (Sim.BatId 3)
+        "4" -> return $ Sim.Commissariat (Sim.Rectangle coord width height) coord ( Sim.BatId 4)
         _ -> do
             putStrLn "Choix non valide, veuillez réessayer."
             askForBuildingDetails x y

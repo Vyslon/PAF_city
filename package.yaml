@@ -26,6 +26,7 @@ dependencies:
 - sdl2
 - random
 - sdl2-ttf
+- text
 
 library:
   source-dirs: src
@@ -40,8 +41,6 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - minijeu
-    - sdl2-ttf
-
 
 tests:
   minijeu-test:
