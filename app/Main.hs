@@ -102,9 +102,9 @@ gameLoop frameRate renderer tmap smap kbd ville font argent frameCount = do
     startTime <- time
     events <- pollEvents
     let kbd' = K.handleEvents events kbd
-    let mouseState = MS.handleEventsMousePos events (MS.MyMouse False (-1) (-1))  -- Create initial state of the mouse here
+    let mouseState = MS.handleEventsMousePos events (MS.MyMouse False False (-1) (-1))  -- Create initial state of the mouse here
     -- Update the game state, handle input, etc.
-    updatedVille <- MS.handleMouseEvents mouseState ville renderer tmap
+    (updatedVille, updatedArgent) <- MS.handleMouseEvents mouseState ville argent renderer tmap
 
     clear renderer
     -- Draw background
@@ -124,8 +124,8 @@ gameLoop frameRate renderer tmap smap kbd ville font argent frameCount = do
     threadDelay (delayTime * 1000)  -- delay to cap frame rate
     let newFrameCount = frameCount + 1
     let newArgent = if newFrameCount `mod` 300 == 0
-                    then argent + 100 + (Sim.calculateMoney updatedVille )
-                    else argent
+                    then updatedArgent + 100 + (Sim.calculateMoney updatedVille )
+                    else updatedArgent
     unless (K.keyPressed KeycodeEscape kbd') $ gameLoop frameRate renderer tmap smap kbd' updatedVille font newArgent newFrameCount
 
 -- Handle mouse click on zones
@@ -142,10 +142,6 @@ checkZoneClick (x, y) zone = do
     let (nord, sud, ouest, est) = Sim.limites forme  -- Adjust to use named boundaries correctly
     when (x >= ouest && x <= est && y >= sud && y <= nord) $ do
         putStrLn $ "Zone clicked: " ++ show (Sim.limites forme)
-
-
-
-
 
 --Pour charger les images, et attribuer à chaque batiment une image
 loadBuildingTextures :: Renderer -> TextureMap -> IO TextureMap

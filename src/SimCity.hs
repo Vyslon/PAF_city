@@ -67,6 +67,10 @@ contient (Rectangle (C x y) largeur hauteur)
     | (hauteur < 0) || (largeur < 0) = []
     | otherwise = (contient (HSegment (C x y) largeur))++(contient (VSegment (C x (y - 1)) (hauteur - 2)))++(contient (HSegment (C x (y - hauteur)) largeur))++(contient (VSegment (C (x + largeur) (y - 1)) (hauteur - 2)))
 
+aire :: Forme -> Int
+aire (HSegment _ longueur) = longueur
+aire (VSegment _ hauteur) = hauteur
+aire (Rectangle _ largeur hauteur) = largeur * hauteur
 
 --Collision exacte:
 collisionManuelle :: Forme -> Forme -> Bool
@@ -104,6 +108,7 @@ data Batiment = Cabane Forme Coord Int [CitId] BatId
     | Atelier Forme Coord Int [CitId] BatId
     | Epicerie Forme Coord Int [CitId] BatId
     | Commissariat Forme Coord BatId
+    deriving (Eq)
 
 data Zone = Eau Forme
     | Route Forme
@@ -264,6 +269,18 @@ buildingsFromZone (ZC _ bldgs) = bldgs
 buildingsFromZone (Admin _ bldg) = [bldg]
 buildingsFromZone _ = []  -- Eau and Route have no buildings
 
+updateBuildingsFromZone :: [Batiment] -> Zone -> Zone
+updateBuildingsFromZone buildings (ZR tmp bldgs) = ZR tmp buildings
+updateBuildingsFromZone buildings (ZI tmp bldgs) = ZI tmp buildings
+updateBuildingsFromZone buildings (ZC tmp bldgs) = ZC tmp buildings
+updateBuildingsFromZone _ tmp = tmp
+
+batIdFromBuilding :: Batiment -> BatId
+batIdFromBuilding (Cabane _ _ _ _ id) = id
+batIdFromBuilding (Atelier _ _ _ _ id) = id
+batIdFromBuilding (Epicerie _ _ _ _ id) = id
+batIdFromBuilding (Commissariat _ _ id) = id
+
 --extraire tous les batiments d'une ville
 getAllBuildings :: Ville -> [Batiment]
 getAllBuildings ville = concatMap buildingsFromZone (Map.elems (viZones ville))
@@ -365,16 +382,26 @@ addZone zone ville =
         else ville  -- Retourne la ville originale si la postcondition échoue
     else ville  -- Retourne la ville originale si la précondition échoue
 
+buildingPrice :: Batiment -> Int
+buildingPrice (Cabane forme _ _ _ _) = 5 * (aire forme)
+buildingPrice (Atelier forme _ _ _ _) = 7 * (aire forme)
+buildingPrice (Epicerie forme _ _ _ _) = 10 * (aire forme)
+buildingPrice (Commissariat forme _ _) = 15 * (aire forme)
+
 -- Function to add a new building to a zone
-addBuildingToZone :: Batiment -> ZoneId -> Ville -> Ville
-addBuildingToZone newBuilding zoneId ville = 
+addBuildingToZone :: Int -> Batiment -> ZoneId -> Ville -> (Ville, Int)
+addBuildingToZone argent newBuilding zoneId ville = 
     case Map.lookup zoneId (viZones ville) of
         Just zone ->
             if buildingInCorrectZone newBuilding zone then
-                let updatedZone = updateZoneWithBuilding zone newBuilding
-                in ville { viZones = Map.insert zoneId updatedZone (viZones ville) }
+                case argent > (buildingPrice newBuilding) of
+                    True -> let updatedZone = updateZoneWithBuilding zone newBuilding in
+                            (ville { viZones = Map.insert zoneId updatedZone (viZones ville) }, (argent - (buildingPrice newBuilding)))
+                        -- TODO : retirer l'argent + renvoyer le nouveau montant d'argent
+                    _ -> (ville, argent)
+
             else
-                ville
+                (ville, argent)
         Nothing -> error "Zone not found"
 
 -- Helper function to add a building to the appropriate zone type
