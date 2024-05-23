@@ -28,6 +28,7 @@ library
       Keyboard
       Model
       Mouse
+      PathFind
       SimCity
       Sprite
       SpriteMap
@@ -40,6 +41,7 @@ library
       base >=4.7 && <5
     , containers
     , linear
+    , pqueue
     , random
     , sdl2
     , sdl2-ttf
@@ -58,6 +60,7 @@ executable minijeu-exe
     , containers
     , linear
     , minijeu
+    , pqueue
     , random
     , sdl2
     , sdl2-ttf
@@ -77,6 +80,7 @@ test-suite minijeu-test
     , containers
     , linear
     , minijeu
+    , pqueue
     , random
     , sdl2
     , sdl2-ttf

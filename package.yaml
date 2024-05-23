@@ -27,6 +27,7 @@ dependencies:
 - random
 - sdl2-ttf
 - text
+- pqueue
 
 library:
   source-dirs: src
@@ -41,6 +42,8 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - minijeu
+    - pqueue
+    - sdl2-ttf
 
 tests:
   minijeu-test:

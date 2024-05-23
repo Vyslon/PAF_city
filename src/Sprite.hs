@@ -104,3 +104,5 @@ createColoredSprite :: Renderer -> V4 Word8 -> Rectangle CInt -> IO ()
 createColoredSprite renderer color area = do
     SDL.rendererDrawColor renderer SDL.$= color  -- Set the drawing color
     SDL.fillRect renderer (Just area)  -- Draw the filled rectangle
+
+

@@ -64,6 +64,18 @@ drawBuilding renderer tmap building = do
     let area = formeToArea forme
     SDL.copy renderer texture Nothing (Just area)  -- Use SDL.copy to render the texture
 
+drawCitizen :: Renderer -> TextureMap -> Sim.Citoyen -> IO ()
+drawCitizen renderer tmap citizen = do
+    let textureId = getTextureIdForCitoyen citizen
+    let texture = TM.fetchTexture textureId tmap
+    let area = getCitizenArea citizen  -- Calculate the area for this citizen
+    SDL.copy renderer texture Nothing (Just area)
+
+-- Helper function to calculate the SDL area from citizen's position
+getCitizenArea :: Sim.Citoyen -> S.Area
+getCitizenArea citizen = 
+    let (Sim.C x y) = Sim.citizenCoord citizen  -- Assume we can get the coordinates directly
+    in S.mkArea (fromIntegral x) (fromIntegral y) 30 80  -- Width = 30, Height = 80
 
 -- Load background image
 loadBackgroundSprite :: Renderer -> TextureMap -> SpriteMap -> IO SpriteMap
@@ -97,36 +109,52 @@ displayMoney renderer font money = do
 
 
 -- Main game loop
-gameLoop :: (RealFrac a, Show a) => a -> Renderer -> TextureMap -> SpriteMap -> K.KeyState -> Sim.Ville -> TTF.Font -> Int -> Int -> IO ()
-gameLoop frameRate renderer tmap smap kbd ville font argent frameCount = do
+gameLoop :: (RealFrac a, Show a) => a -> Renderer -> TextureMap -> SpriteMap -> K.KeyState -> Sim.Ville -> TTF.Font -> Int -> Int -> Sim.CitId -> Sim.BatId -> IO ()
+gameLoop frameRate renderer tmap smap kbd ville font argent frameCount citId batId = do
     startTime <- time
     events <- pollEvents
     let kbd' = K.handleEvents events kbd
-    let mouseState = MS.handleEventsMousePos events (MS.MyMouse False False (-1) (-1))  -- Create initial state of the mouse here
-    -- Update the game state, handle input, etc.
-    (updatedVille, updatedArgent) <- MS.handleMouseEvents mouseState ville argent renderer tmap
+    let mouseState = MS.handleEventsMousePos events (MS.MyMouse False False (-1) (-1))
+
+    -- Update the game state based on mouse events
+    (updatedVille, newBatId, updatedArgent) <- MS.handleMouseEvents mouseState ville argent renderer tmap citId batId
 
     clear renderer
     -- Draw background
     S.displaySprite renderer tmap (SM.fetchSprite (SpriteId "background") smap)
-    -- Draw money
-    displayMoney renderer font argent  -- Display money using SDL.Font
-
-    -- Draw zones and buildings from updated Ville
+    -- Draw all zones
     let zones = Sim.getZones updatedVille
     mapM_ (\zone -> drawZone renderer zone) zones
+    -- Draw all buildings
     let buildings = Sim.getAllBuildings updatedVille
     mapM_ (\building -> drawBuilding renderer tmap building) buildings
+    -- Draw all citizens
+    let citizens = Sim.getAllCitizens updatedVille
+    mapM_ (\citizen -> drawCitizen renderer tmap citizen) citizens
+
+    -- Display current money
+    displayMoney renderer font updatedArgent
+
     present renderer
     endTime <- time
     let elapsed = endTime - startTime
     let delayTime = max 0 (ceiling (1000 / frameRate - elapsed * 1000))
-    threadDelay (delayTime * 1000)  -- delay to cap frame rate
+    threadDelay (delayTime * 1000)
+
     let newFrameCount = frameCount + 1
-    let newArgent = if newFrameCount `mod` 300 == 0
-                    then updatedArgent + 100 + (Sim.calculateMoney updatedVille )
+    let newArgent = if newFrameCount `mod` 500 == 0
+                    then updatedArgent + 100 + (Sim.calculateMoney updatedVille)
                     else updatedArgent
-    unless (K.keyPressed KeycodeEscape kbd') $ gameLoop frameRate renderer tmap smap kbd' updatedVille font newArgent newFrameCount
+
+                    
+    -- Add immigrants every 500 frames
+    let (newVille, newCitId) = if newFrameCount `mod` 500 == 0
+                               then Sim.addImmigrants 3 updatedVille citId
+                               else (updatedVille, citId)
+
+    unless (K.keyPressed KeycodeEscape kbd') $ gameLoop frameRate renderer tmap smap kbd' newVille font newArgent newFrameCount newCitId newBatId
+
+
 
 -- Handle mouse click on zones
 handleMouseClick :: MyMouse -> [Sim.Zone] -> IO ()
@@ -143,6 +171,10 @@ checkZoneClick (x, y) zone = do
     when (x >= ouest && x <= est && y >= sud && y <= nord) $ do
         putStrLn $ "Zone clicked: " ++ show (Sim.limites forme)
 
+
+
+
+
 --Pour charger les images, et attribuer à chaque batiment une image
 loadBuildingTextures :: Renderer -> TextureMap -> IO TextureMap
 loadBuildingTextures renderer initialMap = do
@@ -157,9 +189,13 @@ loadBuildingTextures renderer initialMap = do
     tmapWithEpicerie <- TM.loadTexture renderer "assets/epicerie.bmp" (TextureId "epicerie") tmapWithCabane
 
     -- Charger la texture pour le commissariat et mettre à jour la carte de textures finale
-    finalMap <- TM.loadTexture renderer "assets/comissariat.bmp" (TextureId "commissariat") tmapWithEpicerie
+    tmapWithComico <- TM.loadTexture renderer "assets/comissariat.bmp" (TextureId "commissariat") tmapWithEpicerie
 
-    return finalMap
+    tmapWithImmigrant <- TM.loadTexture renderer "assets/Immigrant.bmp" (TextureId "immigrant") tmapWithComico
+    tmapWithHabitant <- TM.loadTexture renderer "assets/Habitant.bmp" (TextureId "habitant") tmapWithImmigrant
+    tmapWithEmigrant <- TM.loadTexture renderer "assets/Emigrant.bmp" (TextureId "emigrant") tmapWithHabitant
+
+    return tmapWithEmigrant
 
 
 -- Function to draw all buildings
@@ -180,9 +216,12 @@ loadSprites renderer tmap smapInitial = do
     cabane <- createAndAddSprite renderer tmap (SpriteId "cabane")
     epicerie <- createAndAddSprite renderer tmap (SpriteId "epicerie")
     commissariat <- createAndAddSprite renderer tmap (SpriteId "commissariat")
+    habitant <- createAndAddSprite renderer tmap (SpriteId "habitant")
+    immigrant <- createAndAddSprite renderer tmap (SpriteId "immigrant")
+    emigrant <- createAndAddSprite renderer tmap (SpriteId "emigrant")
 
     -- Créer la SpriteMap en ajoutant chaque sprite
-    let updatedSmap = foldl' (\smap (id, sprite) -> SM.addSprite id sprite smap) smapInitial [atelier, cabane, epicerie, commissariat]
+    let updatedSmap = foldl' (\smap (id, sprite) -> SM.addSprite id sprite smap) smapInitial [atelier, cabane, epicerie, commissariat,immigrant,emigrant,habitant]
 
     -- Créer et ajouter le sprite de background
     let backgroundSprite = createBuildingSprite (TextureId "background") (S.mkArea 0 0 640 480)
@@ -203,6 +242,12 @@ createBuildingSprite :: TextureId -> S.Area -> Sprite
 createBuildingSprite textureId area =
     S.defaultScale $ S.addImage S.createEmptySprite $ S.createImage textureId area
 
+
+createCitoyenSprite::TextureId -> S.Area -> Sprite
+createCitoyenSprite textureId area =
+    S.defaultScale $ S.addImage S.createEmptySprite $ S.createImage textureId area
+
+
 -- Function to determine the texture ID based on the building type
 getTextureIdForBuilding :: Sim.Batiment -> TextureId
 getTextureIdForBuilding (Sim.Cabane _ _ _ _ _) = TextureId "cabane"
@@ -210,6 +255,11 @@ getTextureIdForBuilding (Sim.Atelier _ _ _ _ _) = TextureId "atelier"
 getTextureIdForBuilding (Sim.Epicerie _ _ _ _ _) = TextureId "epicerie"
 getTextureIdForBuilding (Sim.Commissariat _ _ _) = TextureId "commissariat"
 
+
+getTextureIdForCitoyen:: Sim.Citoyen -> TextureId
+getTextureIdForCitoyen (Sim.Habitant _ _ _ _) = TextureId "habitant"
+getTextureIdForCitoyen (Sim.Immigrant _ _ _ ) = TextureId "immigrant"
+getTextureIdForCitoyen (Sim.Emigrant _ _) = TextureId "emigrant"
 
 
 main :: IO ()
@@ -230,5 +280,4 @@ main = do
     putStrLn $ "Does the city respect the property? " ++ show villeRespectsProperty
 
     -- Proceed with the game loop
-    gameLoop 60 renderer tmap smap kbd ville font argent 0  -- Pass the font to the game loop
-    
+    gameLoop 60 renderer tmap smap kbd ville font argent 0 (Sim.CitId 0) (Sim.BatId 0)   -- Pass the font to the game loop

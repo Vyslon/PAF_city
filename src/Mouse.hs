@@ -56,37 +56,58 @@ deleteBuilding build zone = let buildings = (Sim.buildingsFromZone zone) in
 
 
 
-handleMouseEvents :: MyMouse -> Sim.Ville -> Int -> Renderer -> TextureMap -> IO (Sim.Ville, Int)
-handleMouseEvents mouse ville argent renderer tmap = do
+handleMouseEvents :: MyMouse -> Sim.Ville -> Int -> Renderer -> TextureMap -> Sim.CitId -> Sim.BatId -> IO (Sim.Ville, Sim.BatId, Int)
+handleMouseEvents mouse ville argent renderer tmap citId batId = do
     let mX = mouseX mouse
     let mY = mouseY mouse
     let maybeZone = findZone (Sim.getZones ville) mX mY  -- Assuming findZone is correctly defined elsewhere
-    let maybeBuilding = findBuilding maybeZone mX mY
 
-    if mouseGaucheActif mouse && isNothing maybeZone then do
-        newZone <- askForZoneDetails mX mY
-        return $ (Sim.addZone newZone ville, argent)
-    else if mouseGaucheActif mouse then do
-        newBuilding <- askForBuildingDetails mX mY
-        let maybeZoneId = Sim.getZoneIdFromCoord (Sim.C mX mY) ville
-        case maybeZoneId of
-            Just zoneId -> do
-                (resville, resargent) <- pure $ (Sim.addBuildingToZone argent newBuilding zoneId ville)
-                return $ (Sim.addBuildingToZone argent newBuilding zoneId ville)
-                -- return $ Sim.addBuildingToZone argent newBuilding zoneId ville
+    if mouseGaucheActif mouse then do
+        case maybeZone of
+            Just zone -> do
+                let maybeBuilding = findBuildingInZone (mX, mY) zone
+                case maybeBuilding of
+                    Just building -> do
+                        newVille <- handleBuildingClick building ville
+                        return (newVille, batId, argent)
+                    Nothing -> do
+                        putStrLn "No building found at these coordinates."
+                        maybeNewBuilding <- askForBuildingDetails mX mY batId
+                        case maybeNewBuilding of
+                            Just newBuilding -> do
+                                let newBatId = Sim.incrementBatId batId
+                                let maybeZoneId = Sim.getZoneIdFromCoord (Sim.C mX mY) ville
+                                case maybeZoneId of
+                                    Just zoneId -> do
+                                        let (updatedVille, newArgent) = Sim.addBuildingToZone argent newBuilding zoneId ville
+                                        return (updatedVille, newBatId, newArgent)
+                                    Nothing -> do
+                                        putStrLn "Error: Zone ID not found."
+                                        return (ville, batId, argent)
+                            Nothing -> return (ville, batId, argent)
             Nothing -> do
-                putStrLn "No valid zone found for the coordinates."
-                return (ville, argent)
+                putStrLn "No zone found at these coordinates. Would you like to create a new zone here? (yes/no)"
+                decision <- getLine
+                if decision == "yes" then do
+                    maybeNewZone <- askForZoneDetails mX mY
+                    case maybeNewZone of
+                        Just newZone -> do
+                            let newVille = Sim.addZone newZone ville
+                            return (newVille, batId, argent)
+                        Nothing -> return (ville, batId, argent)
+                else
+                    return (ville, batId, argent)
     else if mouseDroiteActif mouse && isJust maybeZone then do
+        let maybeBuilding = findBuildingInZone (mX, mY) (fromJust maybeZone)
         if isJust maybeBuilding then do
             putStrLn "Suppression du batiment"
             let maybeZoneId = Sim.getZoneIdFromCoord (Sim.C mX mY) ville
             case maybeZoneId of
                 Just zoneId -> do
-                    return (updateZone zoneId (deleteBuilding (fromJust maybeBuilding) (fromJust maybeZone)) ville, argent)
+                    return (updateZone zoneId (deleteBuilding (fromJust maybeBuilding) (fromJust maybeZone)) ville, batId, argent)
                 Nothing -> do
                     putStrLn "No valid zone found for the coordinates."
-                    return (ville, argent)
+                    return (ville, batId, argent)
         else
             do
             putStrLn "Suppression de la zone"
@@ -98,24 +119,19 @@ handleMouseEvents mouse ville argent renderer tmap = do
                     putStrLn (show (Map.size zones))
                     let cit = Sim.viCit ville
                     putStrLn (show (Map.size (Map.delete zoneId zones)))
-                    return (Sim.V (Map.delete zoneId zones) cit, argent)
+                    return (Sim.V (Map.delete zoneId zones) cit, batId, argent)
                 Nothing -> do
                     putStrLn "No valid zone found for the coordinates."
-                    return (ville, argent)
+                    return (ville, batId, argent)
             
     else
-        return (ville, argent)
+        return (ville, batId, argent)
 
 updateZone :: Sim.ZoneId -> Sim.Zone -> Sim.Ville -> Sim.Ville
 updateZone id zone (Sim.V zones cit) = Sim.V (Map.insert id zone zones) cit
 
 findZone :: [Sim.Zone] -> Int -> Int -> Maybe Sim.Zone
 findZone zones x y = find (zoneContainsPoint x y) zones
-
-findBuilding :: Maybe Sim.Zone -> Int -> Int -> Maybe Sim.Batiment
-findBuilding Nothing _ _ = Nothing
-findBuilding (Just zone) mX mY = let buildings = (Sim.buildingsFromZone zone) in
-    find (buildingContainsPoint mX mY) buildings
 
 zoneContainsPoint :: Int -> Int -> Sim.Zone -> Bool
 zoneContainsPoint x y zone = x >= minX && x <= maxX && y >= minY && y <= maxY
@@ -127,7 +143,8 @@ buildingContainsPoint x y building = x >= minX && x <= maxX && y >= minY && y <=
   where
     (minY, maxY, minX, maxX) = Sim.limites (Sim.getForme building)
 
-askForZoneDetails :: Int -> Int -> IO Sim.Zone
+
+askForZoneDetails :: Int -> Int -> IO (Maybe Sim.Zone)
 askForZoneDetails x y = do
     putStrLn "\nChoisissez un type de zone:"
     putStrLn "1. Résidentielle (ZR)"
@@ -136,49 +153,98 @@ askForZoneDetails x y = do
     putStrLn "4. Route"
     putStrLn "5. Eau"
     putStrLn "6. Administrative"
+    putStrLn "7. Quitter ce menu"
     putStr "Votre choix: "
     hFlush stdout
     choice <- getLine
-    putStrLn "Entrez la largeur de la zone:"
-    widthStr <- getLine
-    putStrLn "Entrez la longueur de la zone:"
-    heightStr <- getLine
-    let width = read widthStr :: Int
-    let height = read heightStr :: Int
-    case choice of
-        "1" -> return $ Sim.ZR (Sim.Rectangle (Sim.C x y) width height) []
-        "2" -> return $ Sim.ZI (Sim.Rectangle (Sim.C x y) width height) []
-        "3" -> return $ Sim.ZC (Sim.Rectangle (Sim.C x y) width height) []
-        "4" -> return $ Sim.Route (Sim.Rectangle (Sim.C x y) width height)
-        "5" -> return $ Sim.Eau (Sim.Rectangle (Sim.C x y) width height)
-        "6" -> return $ Sim.Admin (Sim.Rectangle (Sim.C x y) width height) undefined -- Assurez-vous de définir le bâtiment administratif
-        _ -> do
-            putStrLn "Choix non valide, veuillez réessayer."
-            askForZoneDetails x y
 
-askForBuildingDetails :: Int -> Int -> IO Sim.Batiment
-askForBuildingDetails x y = do
+    case choice of
+        "7" -> do
+            putStrLn "Quitter le menu de sélection des zones."
+            return Nothing
+        _ -> if choice `elem` ["1", "2", "3", "4", "5", "6"] then do
+                putStrLn "Entrez la largeur de la zone:"
+                widthStr <- getLine
+                putStrLn "Entrez la longueur de la zone:"
+                heightStr <- getLine
+                let width = read widthStr :: Int
+                let height = read heightStr :: Int
+                let coord = Sim.C x y
+                return $ Just $ case choice of
+                    "1" -> Sim.ZR (Sim.Rectangle coord width height) []
+                    "2" -> Sim.ZI (Sim.Rectangle coord width height) []
+                    "3" -> Sim.ZC (Sim.Rectangle coord width height) []
+                    "4" -> Sim.Route (Sim.Rectangle coord width height)
+                    "5" -> Sim.Eau (Sim.Rectangle coord width height)
+                    "6" -> Sim.Admin (Sim.Rectangle coord width height) undefined -- Assurez-vous de définir le bâtiment administratif correctement
+            else do
+                putStrLn "Choix non valide, veuillez réessayer."
+                askForZoneDetails x y
+
+
+askForBuildingDetails :: Int -> Int -> Sim.BatId -> IO (Maybe Sim.Batiment)
+askForBuildingDetails x y bid = do
     putStrLn "\nChoisissez un type de bâtiment:"
-    putStrLn "0. Supprimer la zone"
     putStrLn "1. Cabane"
     putStrLn "2. Atelier"
     putStrLn "3. Épicerie"
     putStrLn "4. Commissariat"
+    putStrLn "5. Quitter ce menu"
     putStr "Votre choix: "
     hFlush stdout
     choice <- getLine
-    putStrLn "Entrez la largeur du bâtiment:"
-    widthStr <- getLine
-    putStrLn "Entrez la longueur du bâtiment:"
-    heightStr <- getLine
-    let width = read widthStr :: Int
-    let height = read heightStr :: Int
-    let coord = Sim.C x y
+
     case choice of
-        "1" -> return $ Sim.Cabane (Sim.Rectangle coord width height) coord 5 [] (Sim.BatId 1 ) -- Assumons une capacité fixe pour simplifier
-        "2" -> return $ Sim.Atelier (Sim.Rectangle coord width height) coord 5 [] (Sim.BatId 2)
-        "3" -> return $ Sim.Epicerie (Sim.Rectangle coord width height) coord 5 [] (Sim.BatId 3)
-        "4" -> return $ Sim.Commissariat (Sim.Rectangle coord width height) coord ( Sim.BatId 4)
+        "5" -> do
+            putStrLn "Quitter le menu de sélection des bâtiments."
+            return Nothing
+        _ -> if choice `elem` ["1", "2", "3", "4"] then do
+                putStrLn "Entrez la largeur du bâtiment:"
+                widthStr <- getLine
+                putStrLn "Entrez la longueur du bâtiment:"
+                heightStr <- getLine
+                let width = read widthStr :: Int
+                let height = read heightStr :: Int
+                let coord = Sim.C x y
+                return $ Just $ case choice of
+                    "1" -> Sim.Cabane (Sim.Rectangle coord width height) coord 5 [] bid
+                    "2" -> Sim.Atelier (Sim.Rectangle coord width height) coord 5 [] bid
+                    "3" -> Sim.Epicerie (Sim.Rectangle coord width height) coord 5 [] bid
+                    "4" -> Sim.Commissariat (Sim.Rectangle coord width height) coord bid
+            else do
+                putStrLn "Choix non valide, veuillez réessayer."
+                askForBuildingDetails x y bid
+
+findBuildingInZone :: (Int, Int) -> Sim.Zone -> Maybe Sim.Batiment
+findBuildingInZone (x, y) zone = 
+    case zone of
+        Sim.ZR _ buildings -> find (buildingContainsPoint x y) buildings
+        Sim.ZI _ buildings -> find (buildingContainsPoint x y) buildings
+        Sim.ZC _ buildings -> find (buildingContainsPoint x y) buildings
+        _ -> Nothing
+
+-- Gère les clics sur les bâtiments en proposant des actions spécifiques
+handleBuildingClick :: Sim.Batiment -> Sim.Ville -> IO Sim.Ville
+handleBuildingClick building ville = do
+    case building of
+        Sim.Cabane _ _ _ _ batId -> do
+            putStrLn "Options: [1] Installer un nouvel habitant"
+            choice <- getLine
+            case choice of
+                "1" -> do
+                    let maybeImmigrantId = Sim.findFirstImmigrantId ville
+                    case maybeImmigrantId of
+                        Just immigrantId -> case Sim.addImmigrantToCabane immigrantId batId ville of
+                            Just updatedVille -> do
+                                putStrLn "Nouvel habitant ajouté avec succès."
+                                return updatedVille
+                            Nothing -> do
+                                putStrLn "Échec de l'ajout de l'habitant. Cabane pleine ou problème de CitId."
+                                return ville
+                        Nothing -> do
+                            putStrLn "Aucun immigrant disponible pour l'installation."
+                            return ville
+                _ -> return ville
         _ -> do
-            putStrLn "Choix non valide, veuillez réessayer."
-            askForBuildingDetails x y
+            putStrLn "Aucune action spéciale disponible pour ce type de bâtiment."
+            return ville

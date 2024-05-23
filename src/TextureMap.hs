@@ -58,4 +58,3 @@ destroyTextureMap tmap =
   in do
     forM_ tids (\tid -> TextureMap.destroyTexture tid tmap)
     pure createTextureMap
-

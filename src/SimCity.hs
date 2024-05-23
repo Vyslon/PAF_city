@@ -1,9 +1,15 @@
 module SimCity where
-
+import Debug.Trace (trace)
 import qualified Data.Map as Map
+import qualified Data.Map as Map
+import qualified Data.Map.Strict as MapS
+import qualified Data.PQueue.Min as PQ
 import Data.List (find)
+import Data.List (find)
+import Data.Maybe (fromMaybe)
+import qualified PathFind as PathFind
 
-data Coord = C {cx :: Int, cy :: Int} deriving (Show , Eq)
+data Coord = C {cx :: Int, cy :: Int} deriving (Show , Eq, Ord)
 
 data Forme = HSegment Coord Int
     | VSegment Coord Int
@@ -102,7 +108,7 @@ adjacentes forme1 forme2 = nonChevauchement && (horizontalementAdjacente || vert
 
 newtype ZoneId = ZoneId Int deriving (Eq, Ord)
 newtype BatId = BatId Int deriving (Eq, Show)
-newtype CitId = CitId String deriving (Eq, Ord)
+newtype CitId = CitId Int deriving (Eq, Ord,Show)
 
 data Batiment = Cabane Forme Coord Int [CitId] BatId
     | Atelier Forme Coord Int [CitId] BatId
@@ -130,7 +136,7 @@ data Occupation = Travaille
   | Chomage
   | Dors
   | FaisLesCourses
-  | SeDeplaceVers Coord
+  | SeDeplaceVers [Coord]
   deriving (Show, Eq)
 
 data Citoyen = Immigrant Coord (Int, Int, Int) Occupation
@@ -446,7 +452,10 @@ attribuerLogement citoyen batId ville = case Map.lookup batId ville of
 
 createInitialVille :: Ville
 createInitialVille = V {
-    viZones = Map.empty,
+    viZones = Map.fromList [
+       --(ZoneId 1, Route (Rectangle (C 0 0) 50 400))
+      --  ,(ZoneId 2, Route (Rectangle (C 50 200) 100 50))
+    ],
     viCit = Map.empty  -- Assuming there are no citizens initially or define some if needed
 }
 
@@ -480,21 +489,28 @@ moneyFromBuilding (Cabane _ _ n _ _) = 20 * n
 moneyFromBuilding (Atelier (Rectangle _ w h) _ _ _ _) = w * h  -- Si vous souhaitez également accumuler de l'argent pour les ateliers
 moneyFromBuilding _ = 0  -- Pour tous les autres types ou formes non gérées
 
--- Convertit un immigrant en habitant et l'ajoute à une cabane si possible
+    
 addImmigrantToCabane :: CitId -> BatId -> Ville -> Maybe Ville
 addImmigrantToCabane citId batId ville =
+    trace ("Trying to add immigrant with CitId: " ++ show citId ++ " to Cabane with BatId: " ++ show batId) $
     case Map.lookup citId (viCit ville) of
-        Just (Immigrant coord info occupation) -> -- Seulement traiter si c'est un immigrant
+        Just (Immigrant coord info occupation) ->
+            trace ("Found Immigrant at: " ++ show coord) $
             case findCabane batId ville of
                 Just (Cabane forme cabCoord capacite residents batId) | length residents < capacite ->
-                    let newResidents = residents ++ [citId]
-                        updatedCabane = Cabane forme cabCoord capacite newResidents batId
-                        newVille = updateVilleWithCabane batId updatedCabane ville
-                        newCitoyen = Habitant coord info (batId, Nothing, Nothing) occupation
-                        updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
-                    in Just newVille { viCit = updatedCitoyens }
-                _ -> Nothing -- Soit le bâtiment n'est pas une cabane, soit il est plein
-        _ -> Nothing -- Pas un immigrant ou CitId non trouvé
+                    trace ("Found Cabane at: " ++ show cabCoord ++ " with " ++ show (length residents) ++ "/" ++ show capacite ++ " residents") $
+                    case aStar coord cabCoord ville of
+                        Just path -> 
+                            trace ("Path found: " ++ show path) $
+                            let newResidents = residents ++ [citId]
+                                updatedCabane = Cabane forme cabCoord capacite newResidents batId
+                                newVille = updateVilleWithCabane batId updatedCabane ville
+                                newCitoyen = Habitant coord info (batId, Nothing, Nothing) (SeDeplaceVers path)
+                                updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
+                            in Just newVille { viCit = updatedCitoyens }
+                        Nothing -> trace "No path found" Nothing -- Aucun chemin trouvé
+                _ -> trace "Cabane is full or not found" Nothing -- La cabane est pleine ou non trouvée
+        _ -> trace "Immigrant not found" Nothing -- Immigrant non trouvé
 
 
 -- Trouve une cabane par BatId dans la ville
@@ -527,3 +543,177 @@ updateZoneWithCabane batId cabane zone = case zone of
     ZC forme batiments -> ZC forme batiments
     Admin forme batiment -> Admin forme batiment
     _ -> zone  -- Pour Eau et Route, ou toute autre zone non modifiable pour les bâtiments
+
+
+findFirstImmigrantId :: Ville -> Maybe CitId
+findFirstImmigrantId ville = fmap fst $ find (isImmigrant . snd) (Map.toList (viCit ville))
+
+isImmigrant :: Citoyen -> Bool
+isImmigrant (Immigrant _ _ _) = True
+isImmigrant _ = False
+
+addImmigrants :: Int -> Ville -> CitId -> (Ville, CitId)
+addImmigrants count  ville (CitId startId) =
+    let newCitizens = [Immigrant (C 0 0) (0, 0, 0) Chomage | _ <- [1..count]]
+        newIds = [CitId (startId + i) | i <- [1..count]]
+        updatedMap = foldl (\acc (cit, CitId id) -> Map.insert (CitId id) cit acc) (viCit ville) (zip newCitizens newIds)
+        newCitId = CitId (startId + count)
+    in (ville { viCit = updatedMap }, newCitId)
+
+-- Extrait l'int d'un CitId
+getCitId :: CitId -> Int
+getCitId (CitId id) = id
+
+
+incrementBatId::BatId -> BatId
+incrementBatId (BatId id) = BatId (id+1)
+
+citizenCoord :: Citoyen -> Coord
+citizenCoord (Immigrant res _ _) = res
+citizenCoord (Habitant res _ _ _) = res
+citizenCoord (Emigrant res _) = res
+
+
+getAllCitizens :: Ville -> [Citoyen]
+getAllCitizens ville = Map.elems (viCit ville)
+
+getCitizenForme :: Citoyen -> Forme
+getCitizenForme citoyen = case citoyen of
+    Immigrant coord _ _ -> Rectangle coord 30 80
+    Habitant coord _ _ _ -> Rectangle coord 30 80
+    Emigrant coord _ -> Rectangle coord 30 80
+
+
+-- Retourne la route la plus proche à un citoyen, si disponible
+findNearestRoute :: Coord -> Ville -> Maybe Forme
+findNearestRoute coord ville = 
+    let routes = map zoneForme $ filter isRoute (getZones ville)
+    in case filter (\route -> appartient coord route) routes of
+        [] -> Nothing
+        (route:_) -> Just route
+
+isRoute :: Zone -> Bool
+isRoute (Route _) = True
+isRoute _ = False
+
+
+moveToRoute :: Coord -> Forme -> Coord
+moveToRoute (C x y) (HSegment (C rx ry) length) = C rx y -- Se déplace horizontalement vers la route
+moveToRoute (C x y) (VSegment (C rx ry) height) = C x ry -- Se déplace verticalement vers la route
+
+
+
+updateCitizenPosition :: Ville -> Citoyen -> Citoyen
+updateCitizenPosition ville citoyen = case citoyen of
+    Habitant coord bio batid occ -> updateOccupation ville coord occ
+    Immigrant coord bio occ -> updateOccupation ville coord occ
+    Emigrant coord occ -> updateOccupation ville coord occ
+  where
+    updateOccupation ville coord (SeDeplaceVers [] ) =
+        changeOccupation citoyen Travaille  -- Change occupation to 'Travaille' if the path is empty
+    updateOccupation ville coord (SeDeplaceVers (nextCoord:path) ) = changeCoord citoyen nextCoord path -- Moves to the next coordinate and updates the path
+    updateOccupation ville coord occ = citoyen  -- No update if not moving
+
+
+changeCoord :: Citoyen -> Coord -> [Coord] -> Citoyen
+changeCoord (Habitant _ bio batid _) newCoord path = Habitant newCoord bio batid (SeDeplaceVers path)
+changeCoord (Immigrant _ bio _) newCoord path = Immigrant newCoord bio (SeDeplaceVers path )
+changeCoord (Emigrant _ _) newCoord path = Emigrant newCoord (SeDeplaceVers path )
+
+changeOccupation :: Citoyen -> Occupation -> Citoyen
+changeOccupation (Habitant coord bio batid _) newOcc = Habitant coord bio batid newOcc
+changeOccupation (Immigrant coord bio _) newOcc = Immigrant coord bio newOcc
+changeOccupation (Emigrant coord _) newOcc = Emigrant coord newOcc
+
+moveTowards :: Coord -> Coord -> Coord
+moveTowards (C x1 y1) (C x2 y2) = 
+    let dx = signum (x2 - x1)
+        dy = signum (y2 - y1)
+    in C (x1 + dx) (y1 + dy)
+
+
+
+-- AStar
+
+getNeighbors :: Coord -> Ville -> [Coord]
+getNeighbors (C x y) ville =
+    let routes = filter isRoute $ getZones ville
+        routeForms = map zoneForme routes
+        adjacentCoords = concatMap (generateCoordsOnRoute (C x y)) routeForms
+    in filter (`isOnRoute` routeForms) adjacentCoords
+
+generateCoordsOnRoute :: Coord -> Forme -> [Coord]
+generateCoordsOnRoute (C x y) routeForm =
+    case routeForm of
+        HSegment (C rx ry) len ->
+            [C (rx + dx) ry | dx <- [-1, 1], rx + dx <= rx + len, rx + dx >= rx]
+        VSegment (C rx ry) len ->
+            [C rx (ry + dy) | dy <- [-1, 1], ry + dy <= ry + len, ry + dy >= ry]
+        _ -> []
+
+isOnRoute :: Coord -> [Forme] -> Bool
+isOnRoute coord routes = any (appartient coord) routes
+
+
+extractRouteNeighbors :: Coord -> Forme -> [Coord]
+extractRouteNeighbors (C x y) routeForm =
+    case routeForm of
+        HSegment (C rx ry) length -> if y == ry then [C (rx + dx) y | dx <- [-1..1], dx /= 0] else []
+        VSegment (C rx ry) height -> if x == rx then [C x (ry + dy) | dy <- [-1..1], dy /= 0] else []
+        _ -> [] -- Ignoring non-segment route forms or can extend to handle rectangles if needed
+
+
+
+-- Function to reconstruct the path from the current node to the start using the cameFrom map
+reconstructPath :: Map.Map Coord Coord -> Coord -> [Coord] -> [Coord]
+reconstructPath cameFrom current path = 
+    case Map.lookup current cameFrom of
+        Just prev -> reconstructPath cameFrom prev (current : path)
+        Nothing -> current : path  -- Base case: start of the path
+
+
+aStar :: Coord -> Coord -> Ville -> Maybe [Coord]
+aStar start goal ville = aStarHelper initialOpenSet Map.empty initialGScore initialFScore
+  where
+    initialOpenSet = PQ.singleton (heuristic start goal, start)
+    initialGScore = Map.singleton start 0
+    initialFScore = Map.singleton start (heuristic start goal)
+
+    aStarHelper openSet cameFrom gScore fScore
+        | PQ.null openSet = Nothing
+        | otherwise = 
+            let ((_, current), openRest) = PQ.deleteFindMin openSet
+            in if current == goal
+            then Just (reconstructPath cameFrom current [])
+            else 
+                let neighbors = getNeighbors current ville
+                    (newOpenSet, newGScore, newFScore) = foldr (processNeighbor current) (openRest, gScore, fScore) neighbors
+                in aStarHelper newOpenSet cameFrom newGScore newFScore
+
+    processNeighbor current neighbor (openSet, gScore, fScore) =
+        let tentativeGScore = fromMaybe maxBound (Map.lookup current gScore) + 1
+            gScoreNeighbor = fromMaybe maxBound (Map.lookup neighbor gScore)
+        in if tentativeGScore < gScoreNeighbor
+        then 
+                let newGScore = Map.insert neighbor tentativeGScore gScore
+                    newFScore = Map.insert neighbor (tentativeGScore + heuristic neighbor goal) fScore
+                    newOpenSet = PQ.insert (newFScore Map.! neighbor, neighbor) openSet
+                in (newOpenSet, newGScore, newFScore)
+        else (openSet, gScore, fScore)
+
+    heuristic (C x1 y1) (C x2 y2) = abs (x2 - x1) + abs (y2 - y1)
+
+    trd (_, x, _) = x
+    fth (_, _, x) = x
+
+
+planCitizenMovement :: Ville -> Citoyen -> Coord -> IO Citoyen
+planCitizenMovement ville citoyen destination = do
+    let start = citizenCoord citoyen
+    case aStar start destination ville of
+        Just path -> return $ changeOccupation citoyen (SeDeplaceVers path)
+        Nothing -> do
+            putStrLn "No path found"
+            return citoyen 
+
+
