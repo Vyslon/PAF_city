@@ -232,9 +232,17 @@ loadBuildingTextures renderer initialMap = do
     tmapWithHabitant <- TM.loadTexture renderer "assets/Habitant.bmp" (TextureId "habitant") tmapWithImmigrant
     tmapWithEmigrant <- TM.loadTexture renderer "assets/Emigrant.bmp" (TextureId "emigrant") tmapWithHabitant
     tmapWithRoute <- TM.loadTexture renderer "assets/route.bmp" (TextureId "route") tmapWithEmigrant
+    tmapWithCable <- TM.loadTexture renderer "assets/cable.bmp" (TextureId "cable") tmapWithRoute
+    tmapWithZR <- TM.loadTexture renderer "assets/ZR.bmp" (TextureId "ZR") tmapWithCable
+    tmapWithZI <- TM.loadTexture renderer "assets/ZI.bmp" (TextureId "ZI") tmapWithZR
+    tmapWithZC <- TM.loadTexture renderer "assets/ZC.bmp" (TextureId "ZC") tmapWithZI
+    tmapWithZE <- TM.loadTexture renderer "assets/ZE.bmp" (TextureId "ZE") tmapWithZC
+    tmapWithAdmin <- TM.loadTexture renderer "assets/admin.bmp" (TextureId "admin") tmapWithZE
+    tmapWithEau <- TM.loadTexture renderer "assets/eau.bmp" (TextureId "eau") tmapWithAdmin
+
 
     -- Charger les textures pour les bâtiments améliorés
-    tmapWithImprovedCabane <- TM.loadTexture renderer "assets/cabane_amelioree.bmp" (TextureId "cabane_amelioree") tmapWithRoute
+    tmapWithImprovedCabane <- TM.loadTexture renderer "assets/cabane_amelioree.bmp" (TextureId "cabane_amelioree") tmapWithEau
     tmapWithImprovedAtelier <- TM.loadTexture renderer "assets/atelier_amelioree.bmp" (TextureId "atelier_ameliore") tmapWithImprovedCabane
     tmapWithImprovedEpicerie <- TM.loadTexture renderer "assets/epicerie_amelioree.bmp" (TextureId "epicerie_amelioree") tmapWithImprovedAtelier
 
@@ -264,9 +272,16 @@ loadSprites renderer tmap smapInitial = do
     immigrant <- createAndAddSprite renderer tmap (SpriteId "immigrant")
     emigrant <- createAndAddSprite renderer tmap (SpriteId "emigrant")
     route <- createAndAddSprite renderer tmap (SpriteId "route")
+    cable <- createAndAddSprite renderer tmap (SpriteId "cable")
+    zr <- createAndAddSprite renderer tmap (SpriteId "zr")
+    zi <- createAndAddSprite renderer tmap (SpriteId "zi")
+    zc <- createAndAddSprite renderer tmap (SpriteId "zc")
+    ze <- createAndAddSprite renderer tmap (SpriteId "ze")
+    admin <- createAndAddSprite renderer tmap (SpriteId "admin")
+    eau <- createAndAddSprite renderer tmap (SpriteId "eau")
 
     -- Créer la SpriteMap en ajoutant chaque sprite
-    let updatedSmap = foldl' (\smap (id, sprite) -> SM.addSprite id sprite smap) smapInitial [atelier, cabane, epicerie, commissariat, immigrant, habitant, emigrant, route]
+    let updatedSmap = foldl' (\smap (id, sprite) -> SM.addSprite id sprite smap) smapInitial [atelier, cabane, epicerie, commissariat, immigrant, habitant, emigrant, route, cable, zr, zi, zc, ze, admin, eau]
 
     -- Créer et ajouter les sprites pour les bâtiments améliorés
     improvedCabane <- createAndAddSprite renderer tmap (SpriteId "cabane_amelioree")
@@ -317,6 +332,13 @@ getTextureIdForBuilding (Sim.Commissariat _ _ _) = TextureId "commissariat"
 
 getTextureIdForZone :: Sim.Zone -> TextureId
 getTextureIdForZone (Sim.Route _) = TextureId "route"
+getTextureIdForZone (Sim.Cable _) = TextureId "cable"
+getTextureIdForZone (Sim.ZR _ _) = TextureId "zr"
+getTextureIdForZone (Sim.ZI _ _) = TextureId "zi"
+getTextureIdForZone (Sim.ZC _ _) = TextureId "zc"
+getTextureIdForZone (Sim.ZE _) = TextureId "ze"
+getTextureIdForZone (Sim.Admin _ _) = TextureId "admin"
+getTextureIdForZone (Sim.Eau _) = TextureId "eau"
 
 getTextureIdForCitoyen:: Sim.Citoyen -> TextureId
 getTextureIdForCitoyen (Sim.Habitant _ _ _ _) = TextureId "habitant"
