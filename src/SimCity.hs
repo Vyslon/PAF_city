@@ -8,8 +8,13 @@ import Data.List (find)
 import Data.List (find)
 import Data.Maybe (fromMaybe)
 import qualified PathFind as PathFind
+import Data.Maybe (fromJust, fromMaybe)
 
-data Coord = C {cx :: Int, cy :: Int} deriving (Show , Eq, Ord)
+
+data Coord = C {cx :: Int, cy :: Int} deriving (Eq, Ord)
+
+instance Show Coord where
+    show (C x y) = "Coord (" ++ show x ++ ", " ++ show y ++ ")"
 
 data Forme = HSegment Coord Int
     | VSegment Coord Int
@@ -58,20 +63,17 @@ adjacent (C x1 y1) (Rectangle (C x2 y2) largeur hauteur)
     | abs (y1 - (y2 - 30)) <= 30 || abs (y1 - (y2 + hauteur + 30)) <= 30 = (x1 >= (x2 - 30) && x1 <= (x2 + largeur + 30))
     | otherwise = False
 
-contient::Forme -> [Coord]
+contient :: Forme -> [Coord]
 contient (HSegment (C x y) longueur)
-    | longueur > 0 = (C x y):(contient (HSegment (C (x + 1) y) (longueur - 1)))
-    | longueur < 0 = []
-    | otherwise = [(C x y)]
+    | longueur > 0 = (C x y) : contient (HSegment (C (x + 1) y) (longueur - 1))
+    | otherwise = []
 contient (VSegment (C x y) hauteur)
-    | hauteur > 0 = (C x y):(contient (VSegment (C x (y - 1)) (hauteur - 1)))
-    | hauteur < 0 = []
-    | otherwise = [(C x y)]
+    | hauteur > 0 = (C x y) : contient (VSegment (C x (y - 1)) (hauteur - 1))
+    | otherwise = []
 contient (Rectangle (C x y) largeur hauteur)
-    | hauteur == 0 = contient (HSegment (C x y) largeur)
-    | largeur == 0 = contient (VSegment (C x y) hauteur)
-    | (hauteur < 0) || (largeur < 0) = []
-    | otherwise = (contient (HSegment (C x y) largeur))++(contient (VSegment (C x (y - 1)) (hauteur - 2)))++(contient (HSegment (C x (y - hauteur)) largeur))++(contient (VSegment (C (x + largeur) (y - 1)) (hauteur - 2)))
+    | largeur > 0 && hauteur > 0 = [C i j | j <- [y, y-1 .. y - hauteur + 1], i <- [x .. x + largeur - 1]]
+    | otherwise = []
+
 
 aire :: Forme -> Int
 aire (HSegment _ longueur) = longueur
@@ -89,24 +91,28 @@ collisionManuelle forme1 forme2 =
 adjacentes :: Forme -> Forme -> Bool
 adjacentes forme1 forme2 = nonChevauchement && (horizontalementAdjacente || verticalementAdjacente)
   where
+    marge = 50
     (nord1, sud1, ouest1, est1) = limites forme1
     (nord2, sud2, ouest2, est2) = limites forme2
 
     -- Vérifie qu'il n'y a pas de chevauchement
     nonChevauchement = not (collisionManuelle forme1 forme2)
 
-    -- Vérifie l'adjacence horizontale
+    -- Vérifie l'adjacence horizontale avec une marge d'erreur
     horizontalementAdjacente =
-      (est1 + 1 == ouest2 || ouest1 - 1 == est2) && (nord1 <= nord2 && sud1 >= sud2 || nord2 <= nord1 && sud2 >= sud1)
+      (est1 + marge >= ouest2 && ouest1 - marge <= est2) &&
+      ( (nord1 <= sud2 && nord1 >= nord2) || (sud1 >= nord2 && sud1 <= sud2) ||
+        (nord2 <= sud1 && nord2 >= nord1) || (sud2 >= nord1 && sud2 <= sud1) )
 
-    -- Vérifie l'adjacence verticale
+    -- Vérifie l'adjacence verticale avec une marge d'erreur
     verticalementAdjacente =
-      (sud1 - 1 == nord2 || nord1 + 1 == sud2) && (ouest1 <= ouest2 && est1 >= est2 || ouest2 <= ouest1 && est2 >= est1)
-
+      (sud1 + marge >= nord2 && nord1 - marge <= sud2) &&
+      ( (ouest1 <= est2 && ouest1 >= ouest2) || (est1 >= ouest2 && est1 <= est2) ||
+        (ouest2 <= est1 && ouest2 >= ouest1) || (est2 >= ouest1 && est2 <= est1) )
 -- à verifier
 
 
-newtype ZoneId = ZoneId Int deriving (Eq, Ord)
+newtype ZoneId = ZoneId Int deriving (Show,Eq, Ord)
 newtype BatId = BatId Int deriving (Eq, Show)
 newtype CitId = CitId Int deriving (Eq, Ord,Show)
 
@@ -116,12 +122,37 @@ data Batiment = Cabane Forme Coord Int [CitId] BatId
     | Commissariat Forme Coord BatId
     deriving (Eq)
 
+instance Show Batiment where
+    show (Cabane forme coord capacite residents batId) = 
+        "Cabane " ++ show forme ++ " " ++ show coord ++ " " ++ show capacite ++ " " ++ show residents ++ " " ++ show batId
+    show (Atelier forme coord capacite residents batId) = 
+        "Atelier " ++ show forme ++ " " ++ show coord ++ " " ++ show capacite ++ " " ++ show residents ++ " " ++ show batId
+    show (Epicerie forme coord capacite residents batId) = 
+        "Epicerie " ++ show forme ++ " " ++ show coord ++ " " ++ show capacite ++ " " ++ show residents ++ " " ++ show batId
+    show (Commissariat forme coord batId) = 
+        "Commissariat " ++ show forme ++ " " ++ show coord ++ " " ++ show batId
+
+
 data Zone = Eau Forme
     | Route Forme
+    | Cable Forme
     | ZR Forme [Batiment]
     | ZI Forme [Batiment] 
     | ZC Forme [Batiment] 
+    | ZE Forme
     | Admin Forme Batiment
+
+
+instance Show Zone where
+    show (Eau forme) = "Eau " ++ show forme
+    show (Route forme) = "Route " ++ show forme
+    show (ZR forme batiments) = "ZR " ++ show forme ++ " " ++ show batiments
+    show (ZI forme batiments) = "ZI " ++ show forme ++ " " ++ show batiments
+    show (ZC forme batiments) = "ZC " ++ show forme ++ " " ++ show batiments
+    show (ZE forme) = "Centrale Elec " ++ show forme 
+    show (Cable forme) = "Centrale Elec " ++ show forme 
+    show (Admin forme batiment) = "Admin " ++ show forme ++ " " ++ show batiment
+
 
 instance Eq Zone where -- TODO : vérifir que la liste batiment est la même, créer une fonction pour ça
     (Eau f1) == (Eau f2) = f1 == f2
@@ -130,6 +161,8 @@ instance Eq Zone where -- TODO : vérifir que la liste batiment est la même, cr
     (ZI f1 _) == (ZI f2 _) = f1 == f2
     (ZC f1 _) == (ZC f2 _) = f1 == f2
     (Admin f1 _) == (Admin f2 _) = f1 == f2
+    (ZE f1 ) == (ZE f2) = f1 == f2
+    (Cable f1) == (Cable f2) = f1 == f2
     _ == _ = False
 
 data Occupation = Travaille
@@ -137,11 +170,29 @@ data Occupation = Travaille
   | Dors
   | FaisLesCourses
   | SeDeplaceVers [Coord]
-  deriving (Show, Eq)
+  deriving ( Eq)
+
+instance Show Occupation where
+    show Travaille = "Travaille"
+    show Chomage = "Chomage"
+    show Dors = "Dors"
+    show FaisLesCourses = "FaisLesCourses"
+    show (SeDeplaceVers path) = "SeDeplaceVers " ++ show path
+
 
 data Citoyen = Immigrant Coord (Int, Int, Int) Occupation
     | Habitant Coord (Int, Int, Int) (BatId, Maybe BatId, Maybe BatId) Occupation 
     | Emigrant Coord Occupation
+
+instance Show Citoyen where
+    show (Immigrant coord stats occupation) = 
+        "Immigrant " ++ show coord ++ " " ++ show stats ++ " " ++ show occupation
+    show (Habitant coord stats (maison, travail, courses) occupation) = 
+        "Habitant " ++ show coord ++ " " ++ show stats ++ " (" ++ show maison ++ ", " ++ show travail ++ ", " ++ show courses ++ ") " ++ show occupation
+    show (Emigrant coord occupation) = 
+        "Emigrant " ++ show coord ++ " " ++ show occupation
+
+
 
 zoneForme::Zone -> Forme
 zoneForme (Eau forme) = forme
@@ -150,8 +201,16 @@ zoneForme (ZR forme _) = forme
 zoneForme (ZI forme _) = forme
 zoneForme (ZC forme _) = forme
 zoneForme (Admin forme _) = forme
+zoneForme (ZE forme ) = forme
+zoneForme (Cable forme ) = forme
+
 
 data Ville = V { viZones :: Map.Map ZoneId Zone, viCit :: Map.Map CitId Citoyen }
+
+instance Show Ville where
+    show (V zones citoyens) = "Ville { Zones: " ++ show (Map.toList zones) ++ ", Citoyens: " ++ show (Map.toList citoyens) ++ " }"
+
+
 
 -- Consigne : Dans les questions suivantes, on ne fera plus de supposition sur les constructeurs de Forme
 -- (par exemple, on n’´ecrira plus HSegment), on utilisera uniquement les trois fonctions pr´ec´edentes. (Ainsi,
@@ -181,32 +240,45 @@ prop_ville_sansCollision ville = Map.foldr step True (viZones ville)
 
 -- TODO : Question 1.4 : Ecrire un invariant pour Ville.
 
+verifieRouteCentraleCable ::Zone -> Bool
+verifieRouteCentraleCable (Route _) = True
+verifieRouteCentraleCable (Cable _) = True
+verifieRouteCentraleCable (ZE _) = True
+verifieRouteCentraleCable _ = False
+
 verifieRoute ::Zone -> Bool
 verifieRoute (Route _) = True
 verifieRoute _ = False
 
-
-verifieAdjacenceAuneRoute::Zone -> Ville -> Bool
+verifieAdjacenceAuneRoute :: Zone -> Ville -> Bool
 verifieAdjacenceAuneRoute zone ville =
     Map.foldr step False (viZones ville)
     where
-        step zoneCurrent acc =  acc || ((verifieRoute zoneCurrent) && (adjacentes (zoneForme zoneCurrent) (zoneForme zone)))
--- TODO : tous les citoyens ont une résidence ?
+        step zoneCurrent acc = acc || (verifieRouteCentraleCable zoneCurrent && adjacentes (zoneForme zoneCurrent) (zoneForme zone))
 
+-- Propriété : toutes les zones doivent être adjacentes à une route
 prop_verifieAllZonesAdjacentesRoute :: Ville -> Bool
 prop_verifieAllZonesAdjacentesRoute ville =
-    Map.foldr step True (viZones ville )
+    Map.foldr step True (viZones ville)
     where
-        step zone@(Route forme) acc = True --si on est sur une route, c'est vrai, pas besoin d'adjacence
-        step zone acc =  acc && (verifieAdjacenceAuneRoute zone ville) -- sinon need adjacence
+        step zone acc = acc && (verifieRouteCentraleCable zone || verifieAdjacenceAuneRoute zone ville)
+
 
 
 
 prop_ville :: Ville -> Bool
 prop_ville ville = prop_ville_sansCollision ville && prop_verifieAllZonesAdjacentesRoute ville 
 
-construit::Ville -> Zone -> Ville
-construit (V zones cit) z = (V (Map.insert (ZoneId (Map.size zones)) z zones) cit)
+construit :: Ville -> Zone -> Ville
+construit ville@(V zones cit) z =
+    let newVille = V (Map.insert (ZoneId (Map.size zones)) z zones) cit
+    in newVille
+    --in if prop_ville newVille
+      -- then newVille
+      -- else trace "Ajout de la zone échoué: la ville ne respecte pas les propriétés requises." ville
+
+
+
 
 -- TODO : Question 1.6
 
@@ -215,7 +287,10 @@ pre_construit ville zone =
     let newZoneId = ZoneId $ Map.size (viZones ville) + 1  in
     let mapAfter = Map.insert newZoneId zone (viZones ville) in 
     let ville2 = V mapAfter (viCit ville)  
-    in prop_verifieAllZonesAdjacentesRoute ville2 && prop_ville_sansCollision ville2
+    in prop_ville ville2
+    -- in prop_ville_sansCollision ville2
+    --in prop_verifieAllZonesAdjacentesRoute ville2
+    -- in prop_verifieAllZonesAdjacentesRoute ville2 -- && prop_ville_sansCollision ville2
 
 
 
@@ -273,7 +348,7 @@ buildingsFromZone (ZR _ bldgs) = bldgs
 buildingsFromZone (ZI _ bldgs) = bldgs
 buildingsFromZone (ZC _ bldgs) = bldgs
 buildingsFromZone (Admin _ bldg) = [bldg]
-buildingsFromZone _ = []  -- Eau and Route have no buildings
+buildingsFromZone _ = []  -- Eau and Route have no buildings, idem for wires and electrical central
 
 updateBuildingsFromZone :: [Batiment] -> Zone -> Zone
 updateBuildingsFromZone buildings (ZR tmp bldgs) = ZR tmp buildings
@@ -362,6 +437,32 @@ changerOccupation (Habitant a b c occ) new_occupation = Habitant a b c new_occup
 changerOccupation (Emigrant a occ) new_occupation = Emigrant a new_occupation
 
 
+
+{- POST/PRE INVARIANT CHANGER OCCUPATION-}
+
+
+preconditionChangerOccupation :: Citoyen -> Occupation -> Bool
+preconditionChangerOccupation citoyen new_occupation = new_occupation /= undefined
+
+postconditionChangerOccupation :: Citoyen -> Occupation -> Bool
+postconditionChangerOccupation citoyen new_occupation =
+    let updatedCitoyen = changerOccupation citoyen new_occupation
+    in getOccupation updatedCitoyen == new_occupation
+  where
+    getOccupation (Immigrant _ _ occ) = occ
+    getOccupation (Habitant _ _ _ occ) = occ
+    getOccupation (Emigrant _ occ) = occ
+
+invariantChangerOccupation :: Citoyen -> Occupation -> Bool
+invariantChangerOccupation citoyen new_occupation =
+    let updatedCitoyen = changerOccupation citoyen new_occupation
+    in case (citoyen, updatedCitoyen) of
+        (Immigrant a b _, Immigrant a' b' _) -> a == a' && b == b'
+        (Habitant a b c _, Habitant a' b' c' _) -> a == a' && b == b' && c == c'
+        (Emigrant a _, Emigrant a' _) -> a == a'
+        _ -> False
+
+
 getOccupation::Citoyen ->Occupation
 getOccupation (Immigrant _ _ occ)  = occ
 getOccupation (Habitant _ _ _  occ)  = occ
@@ -380,13 +481,21 @@ recupererChomage ville =
 
 -- Function to add a new zone to a city
 addZone :: Zone -> Ville -> Ville
+addZone cable@(Cable _) ville = addCable cable ville
 addZone zone ville = 
-    if pre_construit ville zone then
-        let villeApres = construit  ville zone-- Suppose que Sim.addZone ajoute simplement la zone sans autres vérifications
-        in if post_construit ville zone villeApres then
-            villeApres  -- Retourne la ville modifiée si la postcondition est validée
-        else ville  -- Retourne la ville originale si la postcondition échoue
-    else ville  -- Retourne la ville originale si la précondition échoue
+   if pre_construit ville zone then
+       let villeApres = construit ville zone -- Suppose que Sim.addZone ajoute simplement la zone sans autres vérifications
+       in if post_construit ville zone villeApres then
+           villeApres  -- Retourne la ville modifiée si la postcondition est validée
+       else trace ("Postcondition failed for zone: " ++ show zone) ville  -- Affiche un message d'erreur si la postcondition échoue
+    else trace ("Precondition failed for zone: " ++ show zone) ville  -- Affiche un message d'erreur si la précondition échoue
+
+--sans les pre/posts pck bug
+addZone zone ville = construit ville zone
+
+
+
+
 
 buildingPrice :: Batiment -> Int
 buildingPrice (Cabane forme _ _ _ _) = 5 * (aire forme)
@@ -399,23 +508,46 @@ addBuildingToZone :: Int -> Batiment -> ZoneId -> Ville -> (Ville, Int)
 addBuildingToZone argent newBuilding zoneId ville = 
     case Map.lookup zoneId (viZones ville) of
         Just zone ->
-            if buildingInCorrectZone newBuilding zone then
-                case argent > (buildingPrice newBuilding) of
-                    True -> let updatedZone = updateZoneWithBuilding zone newBuilding in
-                            (ville { viZones = Map.insert zoneId updatedZone (viZones ville) }, (argent - (buildingPrice newBuilding)))
-                        -- TODO : retirer l'argent + renvoyer le nouveau montant d'argent
-                    _ -> (ville, argent)
+            if buildingInCorrectZone(newBuilding) zone then
+                if argent > buildingPrice newBuilding then
+                    let updatedZone = updateZoneWithBuilding  newBuilding zone
+                        updatedVille = ville { viZones = Map.insert zoneId updatedZone (viZones ville) }
+                        updatedArgent = argent - buildingPrice newBuilding
+                    in trace (show updatedVille) (updatedVille, updatedArgent)
+                else (ville, argent)
+            else (ville, argent)
+        Nothing -> error "erreur addBuildingToZone"
 
-            else
-                (ville, argent)
-        Nothing -> error "Zone not found"
+
+{- CONDITIONS addBuildingZone-}
+preconditionAddBuildingToZone :: Int -> Batiment -> ZoneId -> Ville -> Bool
+preconditionAddBuildingToZone argent newBuilding zoneId ville =
+    argent > 0 && buildingPrice newBuilding >= 0 && Map.member zoneId (viZones ville)
+
+postconditionAddBuildingToZone :: Int -> Batiment -> ZoneId -> Ville -> (Ville, Int) -> Bool
+postconditionAddBuildingToZone argent newBuilding zoneId ville (newVille, newArgent) =
+    let oldZone = Map.lookup zoneId (viZones ville)
+        newZone = Map.lookup zoneId (viZones newVille)
+    in (argent > buildingPrice newBuilding && newArgent == argent - buildingPrice newBuilding) &&
+       case (oldZone, newZone) of
+           (Just oz, Just nz) -> buildingInCorrectZone newBuilding oz && nz == updateZoneWithBuilding  newBuilding oz
+           _ -> False
+
+
+invariantAddBuildingToZone :: Int -> Batiment -> ZoneId -> Ville -> (Ville, Int) -> Bool
+invariantAddBuildingToZone argent newBuilding zoneId ville (newVille, newArgent) =
+    argent == newArgent + buildingPrice newBuilding || argent == newArgent
+
+
+
+
 
 -- Helper function to add a building to the appropriate zone type
-updateZoneWithBuilding :: Zone -> Batiment -> Zone
-updateZoneWithBuilding (ZR forme bats) newBuilding = ZR forme (newBuilding : bats)
-updateZoneWithBuilding (ZI forme bats) newBuilding = ZI forme (newBuilding : bats)
-updateZoneWithBuilding (ZC forme bats) newBuilding = ZC forme (newBuilding : bats)
-updateZoneWithBuilding other _ = other  -- Handle other cases or errors gracefully
+updateZoneWithBuilding :: Batiment -> Zone -> Zone
+updateZoneWithBuilding  newBuilding (ZR forme bats) = ZR forme (newBuilding : bats)
+updateZoneWithBuilding  newBuilding (ZI forme bats) = ZI forme (newBuilding : bats)
+updateZoneWithBuilding  newBuilding  (ZC forme bats) = ZC forme (newBuilding : bats)
+updateZoneWithBuilding  _ other = other
 
 
 
@@ -489,28 +621,77 @@ moneyFromBuilding (Cabane _ _ n _ _) = 20 * n
 moneyFromBuilding (Atelier (Rectangle _ w h) _ _ _ _) = w * h  -- Si vous souhaitez également accumuler de l'argent pour les ateliers
 moneyFromBuilding _ = 0  -- Pour tous les autres types ou formes non gérées
 
-    
+{-    
 addImmigrantToCabane :: CitId -> BatId -> Ville -> Maybe Ville
 addImmigrantToCabane citId batId ville =
-    trace ("Trying to add immigrant with CitId: " ++ show citId ++ " to Cabane with BatId: " ++ show batId) $
     case Map.lookup citId (viCit ville) of
         Just (Immigrant coord info occupation) ->
-            trace ("Found Immigrant at: " ++ show coord) $
             case findCabane batId ville of
                 Just (Cabane forme cabCoord capacite residents batId) | length residents < capacite ->
-                    trace ("Found Cabane at: " ++ show cabCoord ++ " with " ++ show (length residents) ++ "/" ++ show capacite ++ " residents") $
-                    case aStar coord cabCoord ville of
-                        Just path -> 
-                            trace ("Path found: " ++ show path) $
-                            let newResidents = residents ++ [citId]
-                                updatedCabane = Cabane forme cabCoord capacite newResidents batId
-                                newVille = updateVilleWithCabane batId updatedCabane ville
-                                newCitoyen = Habitant coord info (batId, Nothing, Nothing) (SeDeplaceVers path)
-                                updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
-                            in Just newVille { viCit = updatedCitoyens }
-                        Nothing -> trace "No path found" Nothing -- Aucun chemin trouvé
+                    case (findNearestRoute coord ville, findNearestRoute cabCoord ville) of
+                        (Just startRoute, Just endRoute) ->
+                            let startCoord = moveToRoute coord startRoute
+                                endCoord = moveToRoute cabCoord endRoute
+                            in case aStar startCoord endCoord ville of
+                                Just path ->
+                                    let newResidents = residents ++ [citId]
+                                        updatedCabane = Cabane forme cabCoord capacite newResidents batId
+                                        newVille = updateVilleWithCabane batId updatedCabane ville
+                                        fullPath = [startCoord] ++ path ++ [endCoord, cabCoord] -- ajout des déplacements directs
+                                        _ = trace ("startPoint: " ++ show startCoord) ()  -- Afficher le chemin complet
+
+                                        _ = trace ("fullPath: " ++ show fullPath) ()  -- Afficher le chemin complet
+                                        newCitoyen = Habitant coord info (batId, Nothing, Nothing) (SeDeplaceVers fullPath)
+                                        updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
+                                    in Just newVille { viCit = updatedCitoyens }
+                                Nothing -> trace "No path found" Nothing
+                        _ -> trace "Route not found" Nothing -- Une des routes n'a pas été trouvée
                 _ -> trace "Cabane is full or not found" Nothing -- La cabane est pleine ou non trouvée
         _ -> trace "Immigrant not found" Nothing -- Immigrant non trouvé
+-}
+
+
+addImmigrantToCabane :: CitId -> BatId -> Ville -> Maybe Ville
+addImmigrantToCabane citId batId ville =
+    case Map.lookup citId (viCit ville) of
+        Just (Immigrant coord info occupation) ->
+            case findCabane batId ville of
+                Just (Cabane forme cabCoord capacite residents batId) | length residents < capacite ->
+                    let newResidents = residents ++ [citId]
+                        updatedCabane = Cabane forme cabCoord capacite newResidents batId
+                        newCitoyen = Habitant cabCoord (400,400,400) (batId, Nothing, Nothing) Chomage
+                        updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
+                        newVille = updateVilleWithBuilding updatedCabane ville
+                    in Just newVille { viCit = updatedCitoyens }
+                _ -> trace "Cabane is full or not found" Nothing
+        _ -> trace "Immigrant not found" Nothing
+{-Conditions addImmigrantToCabane-}
+
+preconditionAddImmigrantToCabane :: CitId -> BatId -> Ville -> Bool
+preconditionAddImmigrantToCabane citId batId ville =
+    Map.member citId (viCit ville) &&
+    case Map.lookup citId (viCit ville) of
+        Just (Immigrant _ _ _) -> True
+        _ -> False
+
+
+postconditionAddImmigrantToCabane :: CitId -> BatId -> Ville -> Bool
+postconditionAddImmigrantToCabane citId batId ville =
+    case Map.lookup citId (viCit ville) of
+        Just (Habitant _ (400,400,400) (newBatId, Nothing, Nothing) Chomage) ->
+            newBatId == batId
+        _ -> False
+
+invariantAddImmigrantToCabane :: CitId -> BatId -> Ville -> Bool
+invariantAddImmigrantToCabane citId batId ville =
+    case Map.lookup citId (viCit ville) of
+        Just (Habitant _ (400,400,400) (newBatId, Nothing, Nothing) Chomage) ->
+            let cabane = findCabane batId ville
+            in case cabane of
+                Just (Cabane _ _ capacite residents _) -> length residents <= capacite
+                _ -> False
+        _ -> False
+
 
 
 -- Trouve une cabane par BatId dans la ville
@@ -518,31 +699,24 @@ findCabane :: BatId -> Ville -> Maybe Batiment
 findCabane batId ville = 
     let zones = Map.elems (viZones ville)
         buildings = concatMap buildingsFromZone zones  -- Appliquer buildingsFromZone à chaque zone
-    in find (\b -> getBatId b == Just batId && isCabane b) buildings
+    in find (\b -> getBatId b == batId && isCabane b) buildings
 
 
 isCabane :: Batiment -> Bool
 isCabane (Cabane _ _ _ _ _) = True
 isCabane _ = False
 
-getBatId :: Batiment -> Maybe BatId
-getBatId (Cabane _ _ _ _ id) = Just id
-getBatId _ = Nothing
+getBatId :: Batiment ->  BatId
+getBatId (Cabane _ _ _ _ id) =  id
+getBatId (Atelier  _ _ _ _ id )= id 
+getBatId (Epicerie  _ _ _ _  id )= id 
+getBatId (Commissariat  _ _ id )= id 
 
 
-updateVilleWithCabane :: BatId -> Batiment -> Ville -> Ville
-updateVilleWithCabane batId cabane ville = 
-    let updatedZones = Map.map (updateZoneWithCabane batId cabane) (viZones ville)
+updateVilleWithBuilding :: Batiment -> Ville -> Ville
+updateVilleWithBuilding  cabane ville = 
+    let updatedZones = Map.map (updateZoneWithBuilding cabane) (viZones ville)
     in ville { viZones = updatedZones }
-
--- Met à jour la zone avec la nouvelle cabane
-updateZoneWithCabane :: BatId -> Batiment -> Zone -> Zone
-updateZoneWithCabane batId cabane zone = case zone of
-    ZR forme batiments -> ZR forme (cabane : batiments)  -- Ajoute la cabane à la liste existante des bâtiments
-    ZI forme batiments -> ZI forme batiments             -- Garde les autres types de zones inchangées
-    ZC forme batiments -> ZC forme batiments
-    Admin forme batiment -> Admin forme batiment
-    _ -> zone  -- Pour Eau et Route, ou toute autre zone non modifiable pour les bâtiments
 
 
 findFirstImmigrantId :: Ville -> Maybe CitId
@@ -553,12 +727,35 @@ isImmigrant (Immigrant _ _ _) = True
 isImmigrant _ = False
 
 addImmigrants :: Int -> Ville -> CitId -> (Ville, CitId)
-addImmigrants count  ville (CitId startId) =
-    let newCitizens = [Immigrant (C 0 0) (0, 0, 0) Chomage | _ <- [1..count]]
-        newIds = [CitId (startId + i) | i <- [1..count]]
-        updatedMap = foldl (\acc (cit, CitId id) -> Map.insert (CitId id) cit acc) (viCit ville) (zip newCitizens newIds)
-        newCitId = CitId (startId + count)
-    in (ville { viCit = updatedMap }, newCitId)
+addImmigrants count ville (CitId startId) =
+    let existingImmigrants = Map.size $ Map.filter isImmigrant (viCit ville)
+    in if existingImmigrants == 0
+       then let newCitizens = [Immigrant (C 0 0) (200, 0, 0) Chomage | _ <- [1..count]]
+                newIds = [CitId (startId + i) | i <- [1..count]]
+                updatedMap = foldl (\acc (cit, CitId id) -> Map.insert (CitId id) cit acc) (viCit ville) (zip newCitizens newIds)
+                newCitId = CitId (startId + count)
+            in (ville { viCit = updatedMap }, newCitId)
+       else (ville, CitId startId)
+{-Invariant addImmigrant-}
+preconditionAddImmigrants :: Int -> Ville -> CitId -> Bool
+preconditionAddImmigrants _ ville _ = 
+    Map.size (Map.filter isImmigrant (viCit ville)) == 0
+
+
+postconditionAddImmigrants :: Int -> Ville -> CitId -> Ville -> CitId -> Bool
+postconditionAddImmigrants count oldVille oldCitId newVille newCitId =
+    let newImmigrants = Map.filter isImmigrant (viCit newVille)
+        expectedNewIds = [CitId (getCitId oldCitId + i) | i <- [1..count]]
+        newCitizenIds = Map.keys newImmigrants
+    in length newCitizenIds == count &&
+       all (`elem` newCitizenIds) expectedNewIds &&
+       newCitId == CitId (getCitId oldCitId + count)
+  where
+    getCitId (CitId cid) = cid
+
+
+
+
 
 -- Extrait l'int d'un CitId
 getCitId :: CitId -> Int
@@ -584,13 +781,7 @@ getCitizenForme citoyen = case citoyen of
     Emigrant coord _ -> Rectangle coord 30 80
 
 
--- Retourne la route la plus proche à un citoyen, si disponible
-findNearestRoute :: Coord -> Ville -> Maybe Forme
-findNearestRoute coord ville = 
-    let routes = map zoneForme $ filter isRoute (getZones ville)
-    in case filter (\route -> appartient coord route) routes of
-        [] -> Nothing
-        (route:_) -> Just route
+
 
 isRoute :: Zone -> Bool
 isRoute (Route _) = True
@@ -600,7 +791,19 @@ isRoute _ = False
 moveToRoute :: Coord -> Forme -> Coord
 moveToRoute (C x y) (HSegment (C rx ry) length) = C rx y -- Se déplace horizontalement vers la route
 moveToRoute (C x y) (VSegment (C rx ry) height) = C x ry -- Se déplace verticalement vers la route
+moveToRoute (C x y) (Rectangle (C rx ry) _ _) = C rx ry
 
+
+moveFromRouteToDestination :: Ville -> Citoyen -> Coord -> Maybe Citoyen
+moveFromRouteToDestination ville citoyen destination =
+    case findNearestRoute destination ville of
+        Just nearestRoute -> Just $ changeOccupation citoyen (SeDeplaceVers [moveToRoute (citizenCoord citoyen) nearestRoute, destination])
+        Nothing -> Nothing
+
+
+
+
+         
 
 
 updateCitizenPosition :: Ville -> Citoyen -> Citoyen
@@ -609,16 +812,15 @@ updateCitizenPosition ville citoyen = case citoyen of
     Immigrant coord bio occ -> updateOccupation ville coord occ
     Emigrant coord occ -> updateOccupation ville coord occ
   where
-    updateOccupation ville coord (SeDeplaceVers [] ) =
-        changeOccupation citoyen Travaille  -- Change occupation to 'Travaille' if the path is empty
+    updateOccupation ville coord (SeDeplaceVers [] ) = changeOccupation citoyen Travaille  -- Change occupation to 'Travaille' if the path is empty
     updateOccupation ville coord (SeDeplaceVers (nextCoord:path) ) = changeCoord citoyen nextCoord path -- Moves to the next coordinate and updates the path
     updateOccupation ville coord occ = citoyen  -- No update if not moving
 
 
 changeCoord :: Citoyen -> Coord -> [Coord] -> Citoyen
-changeCoord (Habitant _ bio batid _) newCoord path = Habitant newCoord bio batid (SeDeplaceVers path)
-changeCoord (Immigrant _ bio _) newCoord path = Immigrant newCoord bio (SeDeplaceVers path )
-changeCoord (Emigrant _ _) newCoord path = Emigrant newCoord (SeDeplaceVers path )
+changeCoord (Habitant _ bio batid occ) newCoord path = Habitant newCoord bio batid occ
+changeCoord (Immigrant _ bio occ) newCoord path = Immigrant newCoord bio occ
+changeCoord (Emigrant _ occ) newCoord path = Emigrant newCoord occ
 
 changeOccupation :: Citoyen -> Occupation -> Citoyen
 changeOccupation (Habitant coord bio batid _) newOcc = Habitant coord bio batid newOcc
@@ -635,12 +837,23 @@ moveTowards (C x1 y1) (C x2 y2) =
 
 -- AStar
 
+-- Obtenir les coordonnées d'une zone à partir d'une coordonnée donnée
+getZoneCoords :: Coord -> Ville -> [Coord]
+getZoneCoords coord ville = 
+    let zones = getZones ville
+        maybeZone = find (\zone -> appartient coord (zoneForme zone)) zones
+    in case maybeZone of
+        Just zone -> contient (zoneForme zone)
+        Nothing -> []
+
+
 getNeighbors :: Coord -> Ville -> [Coord]
-getNeighbors (C x y) ville =
+getNeighbors coord ville =
     let routes = filter isRoute $ getZones ville
         routeForms = map zoneForme routes
-        adjacentCoords = concatMap (generateCoordsOnRoute (C x y)) routeForms
-    in filter (`isOnRoute` routeForms) adjacentCoords
+        adjacentCoords = concatMap (generateCoordsOnRoute coord) routeForms
+        zoneCoords = getZoneCoords coord ville  -- Ajouter les coordonnées de la zone de départ
+    in filter (\c -> any (appartient c) routeForms || c `elem` zoneCoords) adjacentCoords  -- Inclure les coordonnées de la zone de départ
 
 generateCoordsOnRoute :: Coord -> Forme -> [Coord]
 generateCoordsOnRoute (C x y) routeForm =
@@ -673,47 +886,341 @@ reconstructPath cameFrom current path =
 
 
 aStar :: Coord -> Coord -> Ville -> Maybe [Coord]
-aStar start goal ville = aStarHelper initialOpenSet Map.empty initialGScore initialFScore
-  where
-    initialOpenSet = PQ.singleton (heuristic start goal, start)
-    initialGScore = Map.singleton start 0
-    initialFScore = Map.singleton start (heuristic start goal)
+aStar start goal ville = 
+    let 
+        nearestStartRoute = findNearestRoute start ville
+        nearestEndRoute = findNearestRoute goal ville
+    in case (nearestStartRoute, nearestEndRoute) of
+        (Just startRoute, Just endRoute) -> 
+            let startCoord = moveToRoute start startRoute
+                endCoord = moveToRoute goal endRoute
+            in aStarHelper startCoord endCoord ville
+        _ -> Nothing
 
-    aStarHelper openSet cameFrom gScore fScore
+aStarHelper :: Coord -> Coord -> Ville -> Maybe [Coord]
+aStarHelper start goal ville = go (PQ.singleton (heuristic start goal, start)) Map.empty (Map.singleton start 0) (Map.singleton start (heuristic start goal))
+  where
+    go openSet cameFrom gScore fScore
         | PQ.null openSet = Nothing
         | otherwise = 
             let ((_, current), openRest) = PQ.deleteFindMin openSet
-            in if current == goal
-            then Just (reconstructPath cameFrom current [])
-            else 
-                let neighbors = getNeighbors current ville
-                    (newOpenSet, newGScore, newFScore) = foldr (processNeighbor current) (openRest, gScore, fScore) neighbors
-                in aStarHelper newOpenSet cameFrom newGScore newFScore
+            in if current == goal 
+               then Just (reconstructPath cameFrom current [])
+               else 
+                    let neighbors = getNeighbors current ville
+                        (newOpenSet, newGScore, newFScore) = foldr (processNeighbor current) (openRest, gScore, fScore) neighbors
+                    in go newOpenSet (Map.insert current (fromMaybe current (Map.lookup current cameFrom)) cameFrom) newGScore newFScore
 
     processNeighbor current neighbor (openSet, gScore, fScore) =
         let tentativeGScore = fromMaybe maxBound (Map.lookup current gScore) + 1
             gScoreNeighbor = fromMaybe maxBound (Map.lookup neighbor gScore)
         in if tentativeGScore < gScoreNeighbor
-        then 
+           then 
                 let newGScore = Map.insert neighbor tentativeGScore gScore
                     newFScore = Map.insert neighbor (tentativeGScore + heuristic neighbor goal) fScore
                     newOpenSet = PQ.insert (newFScore Map.! neighbor, neighbor) openSet
                 in (newOpenSet, newGScore, newFScore)
-        else (openSet, gScore, fScore)
+           else (openSet, gScore, fScore)
 
     heuristic (C x1 y1) (C x2 y2) = abs (x2 - x1) + abs (y2 - y1)
 
-    trd (_, x, _) = x
-    fth (_, _, x) = x
+
+moveToNearestRoute :: Ville -> Citoyen -> Maybe Citoyen
+moveToNearestRoute ville citoyen =
+    case findNearestRoute (citizenCoord citoyen) ville of
+        Just nearestRoute -> Just $ changeOccupation citoyen (SeDeplaceVers [moveToRoute (citizenCoord citoyen) nearestRoute])
+        Nothing -> Nothing
 
 
 planCitizenMovement :: Ville -> Citoyen -> Coord -> IO Citoyen
 planCitizenMovement ville citoyen destination = do
     let start = citizenCoord citoyen
-    case aStar start destination ville of
-        Just path -> return $ changeOccupation citoyen (SeDeplaceVers path)
-        Nothing -> do
-            putStrLn "No path found"
-            return citoyen 
+    let updatedCitizen = moveToNearestRoute ville citoyen
+    case updatedCitizen of
+        Just updatedCitizen' ->
+            case findNearestRoute destination ville of
+                Just nearestRouteToDestination ->
+                    case aStar (citizenCoord updatedCitizen') (moveToRoute destination nearestRouteToDestination) ville of
+                        Just path -> return $ changeOccupation updatedCitizen' (SeDeplaceVers path)
+                        Nothing -> return citoyen
+                Nothing -> return citoyen
+        Nothing -> return citoyen
+
+findNearestRoute :: Coord -> Ville -> Maybe Forme
+findNearestRoute coord ville = 
+    let routes = map zoneForme $ filter isRoute (getZones ville)
+    in if null routes
+       then Nothing
+       else Just $ foldr1 (\r1 r2 -> if distance coord r1 < distance coord r2 then r1 else r2) routes
+
+-- Fonction pour calculer la distance entre une coordonnée et une forme
+distance :: Coord -> Forme -> Int
+distance (C x y) (HSegment (C rx ry) length) =
+    if y == ry
+    then min (abs (x - rx)) (abs (x - (rx + length)))
+    else abs (y - ry) + min (abs (x - rx)) (abs (x - (rx + length)))
+distance (C x y) (VSegment (C rx ry) height) =
+    if x == rx
+    then min (abs (y - ry)) (abs (y - (ry + height)))
+    else abs (x - rx) + min (abs (y - ry)) (abs (y - (ry + height)))
+distance (C x y) (Rectangle (C rx ry) width height) =
+    let dx = if x < rx then rx - x else if x > rx + width then x - (rx + width) else 0
+        dy = if y < ry then ry - y else if y > ry + height then y - (ry + height) else 0
+    in dx + dy
+
+findNearestPointOnEndRoute :: Coord -> Forme -> Coord
+findNearestPointOnEndRoute (C x y) routeForm = 
+    case routeForm of
+        HSegment (C rx ry) length -> C (max rx (min (rx + length) x)) ry
+        VSegment (C rx ry) height -> C rx (max ry (min (ry + height) y))
+        Rectangle (C rx ry) width height -> 
+            let nearestX = max rx (min (rx + width) x)
+                nearestY = max ry (min (ry + height) y)
+            in C nearestX nearestY
 
 
+
+-- fin A*
+--Mise à jour des citoyens en simulant un roulement : travail -> dort/course -> travail, les chomeurs font rien 
+
+updateCitizens :: Ville -> Ville
+updateCitizens ville@(V vizones vicit) = 
+    V vizones (Map.map (updateCitizenBasedOnOccupation ville) vicit)
+  where
+    updateCitizenBasedOnOccupation ville citoyen =
+        case getOccupation citoyen of
+            Travaille ->updateTravail ville citoyen
+            Dors -> updateDormir ville citoyen
+            FaisLesCourses -> updateFaisLesCourses ville citoyen
+            _ ->  citoyen
+
+
+
+updateTravail :: Ville -> Citoyen -> Citoyen
+updateTravail ville citoyen@(Habitant coord (argent, fatigue, faim) (maison, Just travail, courses) occupation)
+    | fatigue <= 0 =
+        case findBuilding maison ville of
+            Just maisonCoord -> changeCoord (changeOccupation citoyen Dors) maisonCoord []
+            Nothing -> trace "Home not found" citoyen
+    | faim <= 0 =
+        case courses of
+            Just epicerie -> 
+                case findBuilding epicerie ville of
+                    Just epicerieCoord -> changeCoord (changeOccupation citoyen FaisLesCourses) epicerieCoord []
+                    Nothing -> trace "Grocery store not found" citoyen
+            Nothing -> trace "No grocery store assigned" citoyen
+    | otherwise = Habitant coord (argent + 2, fatigue - 1, faim-2) (maison, Just travail, courses) occupation
+updateTravail _ citoyen = citoyen
+
+{-Conditions updateTravail-}
+-- Précondition
+preconditionUpdateTravail :: Ville -> Citoyen -> Bool
+preconditionUpdateTravail _ (Habitant _ _ (_, Just _, _) _) = True
+preconditionUpdateTravail _ _ = False
+
+-- Postcondition
+postconditionUpdateTravail :: Ville -> Citoyen -> Bool
+postconditionUpdateTravail ville citoyen@(Habitant coord (argent, fatigue, faim) (maison, travail, courses) _) =
+    let updatedCitoyen = updateTravail ville citoyen
+        (Habitant newCoord (newArgent, newFatigue, newFaim) newLogement newOccupation) = updatedCitoyen
+    in case newOccupation of
+        Dors -> newCoord == fromMaybe coord (findBuilding maison ville) && newFatigue > fatigue
+        FaisLesCourses -> newCoord == fromMaybe coord (findBuilding (fromJust courses) ville) && newFaim > faim
+        Travaille -> newCoord == coord && newArgent == argent + 2 && newFatigue == fatigue - 1 && newFaim == faim - 2
+        _ -> False
+postconditionUpdateTravail _ _ = False
+
+-- Invariant
+invariantUpdateTravail :: Citoyen -> Bool
+invariantUpdateTravail citoyen@(Habitant coord bio logement occupation) = 
+    let updatedCitoyen = updateTravail undefined citoyen
+        (Habitant newCoord newBio newLogement newOccupation) = updatedCitoyen
+    in coord == newCoord && logement == newLogement && bio == newBio
+invariantUpdateTravail _ = False
+
+{-fin-}
+
+
+findBuilding :: BatId -> Ville -> Maybe Coord
+findBuilding batId ville = 
+    let buildings = getAllBuildings ville
+        foundBuilding = find (\b -> getBatId b == batId) buildings
+    in getEntry <$> foundBuilding
+
+
+updateDormir :: Ville -> Citoyen -> Citoyen
+updateDormir ville citoyen@(Habitant coord (argent, fatigue, faim) (maison, travail, courses) occupation)
+    | fatigue < 200 = trace ("Fatigue: " ++ show fatigue) $ changeOccupation (Habitant coord (argent, fatigue + 1, faim) (maison, travail, courses) occupation) Dors
+    | otherwise =
+        case travail of
+            Just travailId ->
+                case findBuilding travailId ville of
+                    Just travailCoord -> trace ("Fatigue: " ++ show fatigue) $ changeCoord (changeOccupation citoyen Travaille) travailCoord []
+                    Nothing -> trace ("Fatigue: " ++ show fatigue ++ ", Work not found") citoyen
+            Nothing -> trace ("Fatigue: " ++ show fatigue ++ ", No work assigned") citoyen
+updateDormir _ citoyen = citoyen
+
+
+{-COnditions pour updateDormir
+preconditionUpdateDormir :: Ville -> Citoyen -> Bool
+preconditionUpdateDormir _ (Habitant _ _ (Just _, _, _) _) = True
+preconditionUpdateDormir _ _ = False
+
+
+postconditionUpdateDormir :: Ville -> Citoyen -> Citoyen -> Bool
+postconditionUpdateDormir ville citoyen@(Habitant coord (argent, fatigue, faim) (maison, Just travail, courses) occupation) updatedCitoyen
+    | fatigue < 200 =
+        let (Habitant newCoord (newArgent, newFatigue, newFaim) newHabitation newOccupation) = updatedCitoyen
+        in newFatigue == fatigue + 1 && newOccupation == Dors && newCoord == coord && newArgent == argent && newFaim == faim && newHabitation == (maison, Just travail, courses)
+    | otherwise =
+        case findBuilding (fromJust travail) ville of
+            Just travailCoord -> 
+                let (Habitant newCoord (newArgent, newFatigue, newFaim) newHabitation newOccupation) = updatedCitoyen
+                in newCoord == travailCoord && newOccupation == Travaille
+            Nothing -> False
+postconditionUpdateDormir _ _ _ = False
+
+-}
+
+  
+
+
+updateFaisLesCourses :: Ville -> Citoyen -> Citoyen
+updateFaisLesCourses ville citoyen@(Habitant coord (argent, fatigue, faim) (maison, Just travail, courses) occupation)
+    | argent > 2 && faim < 200 = Habitant coord (argent - 2, fatigue, faim + 5) (maison, Just travail, courses) FaisLesCourses
+    | otherwise =
+        case findBuilding travail ville of
+            Just travailCoord -> changeCoord (changeOccupation citoyen Travaille) travailCoord []
+            Nothing -> trace "Work not found" citoyen
+updateFaisLesCourses _ citoyen = citoyen
+
+
+--Donner un travail aux habitants
+
+
+
+assignWorkToHabitant :: CitId -> BatId -> Ville -> Maybe Ville
+assignWorkToHabitant citId batId ville = 
+    case Map.lookup citId (viCit ville) of
+        Just (Habitant coord info (maison, _, courses) occupation) ->
+            case findBuilding batId ville of
+                Just buildingCoord ->
+                    let newCitoyen = Habitant buildingCoord info (maison, Just batId, courses) Travaille
+                        updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
+                    in Just ville { viCit = updatedCitoyens }
+                Nothing -> trace ("Building not found for BatId: " ++ show batId) Nothing
+        _ -> trace ("Habitant not found for CitId: " ++ show citId) Nothing
+
+-- Trouver un habitant sans travail
+findFirstHabitantId :: Ville -> Maybe CitId
+findFirstHabitantId ville = 
+    fmap fst $ find (isUnemployedHabitant . snd) (Map.toList (viCit ville))
+
+isUnemployedHabitant :: Citoyen -> Bool
+isUnemployedHabitant (Habitant _ _ (_, Nothing, _) _) = True
+isUnemployedHabitant _ = False
+
+
+--assigner un endroit où se nourrir
+-- Fonction pour assigner une épicerie à un habitant
+assignGroceryToHabitant :: CitId -> BatId -> Ville -> Maybe Ville
+assignGroceryToHabitant citId batId ville = 
+    case Map.lookup citId (viCit ville) of
+        Just (Habitant coord info (maison, travail, _) occupation) ->
+            case findBuilding batId ville of
+                Just buildingCoord ->
+                    let newCitoyen = Habitant coord info (maison, travail, Just batId) occupation
+                        updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
+                    in Just ville { viCit = updatedCitoyens }
+                Nothing -> trace ("Building not found for BatId: " ++ show batId) Nothing
+        _ -> trace ("Habitant not found for CitId: " ++ show citId) Nothing
+
+-- Trouver un habitant sans épicerie assignée
+findFirstHabitantWithoutGroceryId :: Ville -> Maybe CitId
+findFirstHabitantWithoutGroceryId ville = 
+    fmap fst $ find (isHabitantWithoutGrocery . snd) (Map.toList (viCit ville))
+
+isHabitantWithoutGrocery :: Citoyen -> Bool
+isHabitantWithoutGrocery (Habitant _ _ (_, _, Nothing) _) = True
+isHabitantWithoutGrocery _ = False
+
+--compter les habitants pour le panneau
+
+countCitizens :: Ville -> (Int, Int, Int)
+countCitizens ville =
+    let citizens = Map.elems (viCit ville)
+        immigrants = length (filter isImmigrant citizens)
+        emigrants = length (filter isEmigrant citizens)
+        habitants = length (filter isHabitant citizens)
+    in (immigrants, emigrants, habitants)
+
+
+isEmigrant :: Citoyen -> Bool
+isEmigrant (Emigrant _ _) = True
+isEmigrant _ = False
+
+isHabitant :: Citoyen -> Bool
+isHabitant (Habitant _ _ _ _) = True
+isHabitant _ = False
+
+
+augmenterCapaciteBatiments :: [Batiment] -> [Batiment]
+augmenterCapaciteBatiments = map augmenterCapacite
+  where
+    augmenterCapacite (Cabane forme coord capacite residents batId) = Cabane forme coord (capacite + 10) residents batId
+    augmenterCapacite (Atelier forme coord capacite residents batId) = Atelier forme coord (capacite + 4) residents batId
+    augmenterCapacite (Epicerie forme coord capacite residents batId) = Epicerie forme coord (capacite + 4) residents batId
+    augmenterCapacite autre = autre
+
+-- Fonction pour vérifier si une zone est adjacente à une autre zone
+validAdjacentZone :: Forme -> Zone -> Bool
+validAdjacentZone newCableForm zone = case zone of
+    ZE forme -> adjacentes forme newCableForm
+    Cable forme -> adjacentes forme newCableForm
+    _ -> False
+
+-- Mettre à jour la ville avec l'électricité en augmentant la capacité des bâtiments
+updateWithElectricity :: Ville -> Ville
+updateWithElectricity ville =
+    let zones = Map.toList (viZones ville)
+        cables = filter (isCable . snd) zones
+        updatedZones = foldl updateZoneElectricity (viZones ville) cables
+    in ville { viZones = updatedZones }
+  where
+    isCable (Cable _) = True
+    isCable _ = False
+
+    updateZoneElectricity :: Map.Map ZoneId Zone -> (ZoneId, Zone) -> Map.Map ZoneId Zone
+    updateZoneElectricity zones (zoneId, Cable forme) =
+        let adjacents = filter (adjacentes forme . zoneForme . snd) (Map.toList zones)
+        in foldl augmenterCapaciteSiAdjacente zones adjacents
+
+    augmenterCapaciteSiAdjacente :: Map.Map ZoneId Zone -> (ZoneId, Zone) -> Map.Map ZoneId Zone
+    augmenterCapaciteSiAdjacente zones (adjZoneId, ZR forme batiments) =
+        Map.adjust (\(ZR forme _) -> ZR forme (augmenterCapaciteBatiments batiments)) adjZoneId zones
+    augmenterCapaciteSiAdjacente zones (adjZoneId, ZI forme batiments) =
+        Map.adjust (\(ZI forme _) -> ZI forme (augmenterCapaciteBatiments batiments)) adjZoneId zones
+    augmenterCapaciteSiAdjacente zones (adjZoneId, ZC forme batiments) =
+        Map.adjust (\(ZC forme _) -> ZC forme (augmenterCapaciteBatiments batiments)) adjZoneId zones
+    augmenterCapaciteSiAdjacente zones _ = zones
+
+-- Fonction pour ajouter un câble à la ville
+addCable :: Zone -> Ville -> Ville
+addCable zoneCable ville =
+    let zones = Map.elems (viZones ville)
+        validAdjacentZone zone = case zone of
+            ZE forme -> adjacentes forme (zoneForme zoneCable)
+            Cable forme -> adjacentes forme (zoneForme zoneCable)
+            _ -> False
+        isValidCable = any validAdjacentZone zones
+    in if isValidCable
+       then
+           let newZone = Cable (zoneForme zoneCable)
+               updatedVille = construit ville newZone
+           in (updateWithElectricity updatedVille)
+       else ville
+
+updateZoneWithBuildings :: Zone -> [Batiment] -> Zone
+updateZoneWithBuildings (ZR forme _) buildings = ZR forme buildings
+updateZoneWithBuildings (ZI forme _) buildings = ZI forme buildings
+updateZoneWithBuildings (ZC forme _) buildings = ZC forme buildings

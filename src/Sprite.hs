@@ -97,6 +97,9 @@ zoneColor (Sim.ZC _ _) = V4 0 0 255 255     -- Blue for commercial areas
 zoneColor (Sim.Route _) = V4 128 128 128 255 -- Grey for roads
 zoneColor (Sim.Eau _) = V4 0 0 128 255      -- Dark blue for water bodies
 zoneColor (Sim.Admin _ _) = V4 255 255 0 255 -- Yellow for administrative buildings
+zoneColor (Sim.ZE _) = V4 255 165 0 255     -- Orange for electric power plants
+zoneColor (Sim.Cable _) = V4 192 192 192 255 -- Silver for cables
+
 
 
 -- Function to create and display a colored rectangle on the screen
