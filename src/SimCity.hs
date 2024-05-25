@@ -632,10 +632,12 @@ moneyFromZone :: Zone -> Int
 moneyFromZone zone = sum $ map moneyFromBuilding (buildingsFromZone zone)
 
 moneyFromBuilding :: Batiment -> Int
-moneyFromBuilding (Epicerie (Rectangle  w h)   workers ) = 30 * length workers
-moneyFromBuilding (Cabane   n  ) = 20 * n
-moneyFromBuilding (Atelier (Rectangle  w h)   workers ) = 30 * length workers
+moneyFromBuilding (Epicerie _ _ _  workers _) = 30 * length workers
+moneyFromBuilding (Cabane _ _ _ n _) = 20 * length n
+moneyFromBuilding (Atelier _ _ _ workers n) = 30 * length workers
 moneyFromBuilding _ = 0  -- Pour tous les autres types ou formes non gérées
+
+
 
 {-    
 addImmigrantToCabane :: CitId -> BatId -> Ville -> Maybe Ville
@@ -1324,3 +1326,22 @@ countBuildingsNearCommissariats ville =
     
     isCommissariat (Commissariat _ _ _) = True
     isCommissariat _ = False
+
+-- Fonction pour transformer les citoyens en émigrants si leur faim ou leur sommeil est à 0
+checkAndTransformCitizens :: Ville -> Ville
+checkAndTransformCitizens ville = 
+    ville { viCit = Map.map checkCitizen (viCit ville) }
+  where
+    checkCitizen :: Citoyen -> Citoyen
+    checkCitizen citoyen@(Immigrant _ (faim, _, sommeil) _) 
+        | faim <= 0 || sommeil <= 0 = transformToEmigrant citoyen
+        | otherwise = citoyen
+    checkCitizen citoyen@(Habitant _ (faim, _, sommeil) _ _) 
+        | faim <= 0 || sommeil <= 0 = transformToEmigrant citoyen
+        | otherwise = citoyen
+    checkCitizen citoyen = citoyen 
+
+transformToEmigrant :: Citoyen -> Citoyen
+transformToEmigrant (Immigrant coord _ _) = Emigrant coord Chomage
+transformToEmigrant (Habitant coord _ _ _) = Emigrant coord Chomage
+transformToEmigrant citoyen = citoyen  -- Juste au cas où, même si cela ne devrait pas arriver

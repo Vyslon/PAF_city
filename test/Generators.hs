@@ -269,7 +269,7 @@ genVille maxX maxY = do
     return $ V (Map.fromList (zip (map ZoneId [0..]) zones)) Map.empty
 
 property_inv_genVille :: Property
-property_inv_genVille = forAll (genVille 800 800) $ prop_ville_sansCollision
+property_inv_genVille = forAll (genVille 800 800) $ prop_ville
 
 -- quickCheck prop_genBridgeOK_inv
 
