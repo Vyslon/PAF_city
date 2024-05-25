@@ -1283,9 +1283,9 @@ pollutionScore:: Ville -> Int
 pollutionScore ville = 
      Map.foldr step 0 (viZones ville) 
     where
-        step (ZE _) acc = acc +20 
+        step (ZE _) acc = acc + 20 
         step (Cable _) acc= 5 + acc
-        step (Eau _)acc = acc + 20 
+        step (Eau _) acc = acc - 20 
         step _ acc= acc
 
 
