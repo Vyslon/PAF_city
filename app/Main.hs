@@ -273,10 +273,10 @@ loadSprites renderer tmap smapInitial = do
     emigrant <- createAndAddSprite renderer tmap (SpriteId "emigrant")
     route <- createAndAddSprite renderer tmap (SpriteId "route")
     cable <- createAndAddSprite renderer tmap (SpriteId "cable")
-    zr <- createAndAddSprite renderer tmap (SpriteId "zr")
-    zi <- createAndAddSprite renderer tmap (SpriteId "zi")
-    zc <- createAndAddSprite renderer tmap (SpriteId "zc")
-    ze <- createAndAddSprite renderer tmap (SpriteId "ze")
+    zr <- createAndAddSprite renderer tmap (SpriteId "ZR")
+    zi <- createAndAddSprite renderer tmap (SpriteId "ZI")
+    zc <- createAndAddSprite renderer tmap (SpriteId "ZC")
+    ze <- createAndAddSprite renderer tmap (SpriteId "ZE")
     admin <- createAndAddSprite renderer tmap (SpriteId "admin")
     eau <- createAndAddSprite renderer tmap (SpriteId "eau")
 
@@ -333,10 +333,10 @@ getTextureIdForBuilding (Sim.Commissariat _ _ _) = TextureId "commissariat"
 getTextureIdForZone :: Sim.Zone -> TextureId
 getTextureIdForZone (Sim.Route _) = TextureId "route"
 getTextureIdForZone (Sim.Cable _) = TextureId "cable"
-getTextureIdForZone (Sim.ZR _ _) = TextureId "zr"
-getTextureIdForZone (Sim.ZI _ _) = TextureId "zi"
-getTextureIdForZone (Sim.ZC _ _) = TextureId "zc"
-getTextureIdForZone (Sim.ZE _) = TextureId "ze"
+getTextureIdForZone (Sim.ZR _ _) = TextureId "ZR"
+getTextureIdForZone (Sim.ZI _ _) = TextureId "ZI"
+getTextureIdForZone (Sim.ZC _ _) = TextureId "ZC"
+getTextureIdForZone (Sim.ZE _) = TextureId "ZE"
 getTextureIdForZone (Sim.Admin _ _) = TextureId "admin"
 getTextureIdForZone (Sim.Eau _) = TextureId "eau"
 
