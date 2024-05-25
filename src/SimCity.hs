@@ -616,9 +616,9 @@ moneyFromZone zone = sum $ map moneyFromBuilding (buildingsFromZone zone)
 
 -- Calculer l'argent d'un bâtiment
 moneyFromBuilding :: Batiment -> Int
-moneyFromBuilding (Epicerie (Rectangle _ w h) _ _ _ _) = w * h
-moneyFromBuilding (Cabane _ _ n _ _) = 20 * n
-moneyFromBuilding (Atelier (Rectangle _ w h) _ _ _ _) = w * h  -- Si vous souhaitez également accumuler de l'argent pour les ateliers
+moneyFromBuilding (Epicerie (Rectangle  w h)   workers ) = 30 * length workers
+moneyFromBuilding (Cabane   n  ) = 20 * n
+moneyFromBuilding (Atelier (Rectangle  w h)   workers ) = 30 * length workers
 moneyFromBuilding _ = 0  -- Pour tous les autres types ou formes non gérées
 
 {-    
