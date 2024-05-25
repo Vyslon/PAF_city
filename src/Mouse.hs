@@ -184,7 +184,7 @@ askForZoneDetails x y = do
                     "3" -> Sim.ZC (Sim.Rectangle coord width height) []
                     "4" -> Sim.Route (Sim.Rectangle coord width height)
                     "5" -> Sim.Eau (Sim.Rectangle coord width height)
-                    "6" -> Sim.Admin (Sim.Rectangle coord width height) undefined -- Assurez-vous de définir le bâtiment administratif correctement
+                    "6" -> Sim.Admin (Sim.Rectangle coord width height) (Sim.Commissariat (Sim.Rectangle (Sim.C (-1) (-1)) (-1) (-1)) (Sim.C (-1) (-1)) (Sim.BatId (-1))) -- Assurez-vous de définir le bâtiment administratif correctement
                     "7" -> Sim.ZE (Sim.Rectangle coord width height)
                     "8" -> Sim.Cable (Sim.Rectangle coord width height)
             else do

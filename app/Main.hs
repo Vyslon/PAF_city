@@ -108,12 +108,15 @@ loadPerso rdr path tmap smap = do
 displayMoney :: Renderer -> TTF.Font -> Int -> IO ()
 displayMoney renderer font money = do
     let text = pack $ "Money: " ++ show money ++ " €"  -- Prepare text
-    let color = V4 255 255 255 255  -- White color
+    let color = V4 0 155 0 0  -- White color
     surface <- TTF.blended font color text  -- Create anti-aliased text surface
     texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
     SDL.freeSurface surface  -- Free the surface after creating the texture
     texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
-    let textPos = P (V2 10 10)  -- Define position for the text
+    let textWidth = SDL.textureWidth texInfo
+    let textHeight = SDL.textureHeight texInfo
+    let padding = 10
+    let textPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 3 * (textHeight)))
     let textRect = Rectangle textPos (V2 (SDL.textureWidth texInfo) (SDL.textureHeight texInfo))
     SDL.copy renderer texture Nothing (Just textRect)  -- Render the texture
     SDL.destroyTexture texture  -- Destroy the texture to clean up
@@ -123,36 +126,108 @@ displayMoney renderer font money = do
 displayCitizenCount :: Renderer -> TTF.Font -> Sim.Ville -> IO ()
 displayCitizenCount renderer font ville = do
     let (immigrants, emigrants, habitants) = Sim.countCitizens(ville)
-    let text = pack $ "Immigrants: " ++ show immigrants ++ "\nEmigrants: " ++ show emigrants ++ "\nHabitants: " ++ show habitants
+    let immigrantsText = pack $ "Immigrants: " ++ show immigrants
+    let emigrantsText = pack $ "Emigrants: " ++ show emigrants
+    let habitantsText = pack $ "Habitants: " ++ show habitants
     let color = V4 0 0 0 255  -- Black color for text
+
+    -- Create surfaces and textures for each line of text
+    immigrantsSurface <- TTF.blended font color immigrantsText
+    emigrantsSurface <- TTF.blended font color emigrantsText
+    habitantsSurface <- TTF.blended font color habitantsText
+
+    immigrantsTexture <- SDL.createTextureFromSurface renderer immigrantsSurface
+    emigrantsTexture <- SDL.createTextureFromSurface renderer emigrantsSurface
+    habitantsTexture <- SDL.createTextureFromSurface renderer habitantsSurface
+
+    SDL.freeSurface immigrantsSurface
+    SDL.freeSurface emigrantsSurface
+    SDL.freeSurface habitantsSurface
+
+    immigrantsTexInfo <- SDL.queryTexture immigrantsTexture
+    emigrantsTexInfo <- SDL.queryTexture emigrantsTexture
+    habitantsTexInfo <- SDL.queryTexture habitantsTexture
+
+    let textWidth = SDL.textureWidth immigrantsTexInfo
+    let textHeight = SDL.textureHeight immigrantsTexInfo
+    let padding = 10
+
+    -- Define positions for each line of text inside the panel
+    let immigrantsPos = P (V2 (800 - textWidth - padding - 10) (10 + padding))
+    let emigrantsPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + textHeight))
+    let habitantsPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 2 * (textHeight)))
+
+    let immigrantsRect = Rectangle immigrantsPos (V2 textWidth textHeight)
+    let emigrantsRect = Rectangle emigrantsPos (V2 textWidth textHeight)
+    let habitantsRect = Rectangle habitantsPos (V2 textWidth textHeight)
+
+    -- Render the text
+    SDL.copy renderer immigrantsTexture Nothing (Just immigrantsRect)
+    SDL.copy renderer emigrantsTexture Nothing (Just emigrantsRect)
+    SDL.copy renderer habitantsTexture Nothing (Just habitantsRect)
+
+    -- Destroy the textures to clean up
+    SDL.destroyTexture immigrantsTexture
+    SDL.destroyTexture emigrantsTexture
+    SDL.destroyTexture habitantsTexture
+
+
+displayPanel :: Renderer -> TTF.Font -> IO ()
+displayPanel renderer font = do
+    let text = pack $ "Panneau"
+    let color = V4 0 0 0 255  -- Black color for text
+    surface <- TTF.blended font color text  -- Create anti-aliased text surface
+    texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
+    -- SDL.freeSurface surface  -- Free the surface after creating the texture
+    -- texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
+    texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
+    let textWidth = SDL.textureWidth texInfo
+    let textHeight = SDL.textureHeight texInfo
+    let padding = 10
+    let panelWidth = 21 * padding
+    let panelHeight = (textHeight + padding) * 6 + padding
+    let panelPos = P (V2 (800 - panelWidth) 0)  -- Define position for the panel in the top-right corner
+    let panelRect = Rectangle panelPos (V2 panelWidth panelHeight)
+    rendererDrawColor renderer $= V4 255 255 255 255  -- White color for panel
+    fillRect renderer (Just panelRect)
+
+    -- SDL.destroyTexture texture  -- Destroy the texture to clean up
+
+displayPollution :: Renderer -> TTF.Font -> Int -> IO ()
+displayPollution renderer font pollution = do
+    let text = pack $ "Pollution : " ++ show pollution  -- Prepare text
+    let color = V4 153 102 51 0  -- White color
     surface <- TTF.blended font color text  -- Create anti-aliased text surface
     texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
     SDL.freeSurface surface  -- Free the surface after creating the texture
     texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
-
     let textWidth = SDL.textureWidth texInfo
     let textHeight = SDL.textureHeight texInfo
     let padding = 10
-    let panelWidth = textWidth + 2 * padding
-    let panelHeight = textHeight + 2 * padding
+    let textPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 5 * (textHeight)))
+    let textRect = Rectangle textPos (V2 (SDL.textureWidth texInfo) (SDL.textureHeight texInfo))
+    SDL.copy renderer texture Nothing (Just textRect)  -- Render the texture
+    SDL.destroyTexture texture  -- Destroy the texture to clean up
 
-    let panelPos = P (V2 (800 - panelWidth - 10) 10)  -- Define position for the panel in the top-right corner
-    let panelRect = Rectangle panelPos (V2 panelWidth panelHeight)
-
-    let textPos = P (V2 (800 - textWidth - padding - 10) (padding + 10))  -- Define position for the text inside the panel
-    let textRect = Rectangle textPos (V2 textWidth textHeight)
-
-    -- Draw white background panel
-    rendererDrawColor renderer $= V4 255 255 255 255  -- White color for panel
-    fillRect renderer (Just panelRect)
-
-    -- Render the text
-    SDL.copy renderer texture Nothing (Just textRect)
+displaySecurityScore :: Renderer -> TTF.Font -> Int -> IO ()
+displaySecurityScore renderer font security = do
+    let text = pack $ "Sécurité : " ++ show security  -- Prepare text
+    let color = V4 0 0 180 0  -- White color
+    surface <- TTF.blended font color text  -- Create anti-aliased text surface
+    texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
+    SDL.freeSurface surface  -- Free the surface after creating the texture
+    texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
+    let textWidth = SDL.textureWidth texInfo
+    let textHeight = SDL.textureHeight texInfo
+    let padding = 10
+    let textPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 6 * (textHeight)))
+    let textRect = Rectangle textPos (V2 (SDL.textureWidth texInfo) (SDL.textureHeight texInfo))
+    SDL.copy renderer texture Nothing (Just textRect)  -- Render the texture
     SDL.destroyTexture texture  -- Destroy the texture to clean up
 
 displayMouseCoordinates :: Renderer -> TTF.Font -> MyMouse -> IO ()
 displayMouseCoordinates renderer font mouse = do
-    let text = pack $ "Coordonnées souris: [X = " ++ show (MS.mouseX mouse) ++ ", Y = " ++ show (MS.mouseY mouse) ++ "]"
+    let text = pack $ "[X = " ++ show (MS.mouseX mouse) ++ ", Y = " ++ show (MS.mouseY mouse) ++ "]"
     let color = V4 0 0 0 255  -- Black color for text
     surface <- TTF.blended font color text  -- Create anti-aliased text surface
     texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
@@ -162,18 +237,12 @@ displayMouseCoordinates renderer font mouse = do
     let textWidth = SDL.textureWidth texInfo
     let textHeight = SDL.textureHeight texInfo
     let padding = 10
-    let panelWidth = textWidth + 2 * padding
-    let panelHeight = textHeight + 2 * padding
 
-    let panelPos = P (V2 (800 - panelWidth - 10) 50)  -- Define position for the panel in the top-right corner
-    let panelRect = Rectangle panelPos (V2 panelWidth panelHeight)
-
-    let textPos = P (V2 (800 - textWidth - padding - 10) (padding + 50))  -- Define position for the text inside the panel
+    let textPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 4 * (textHeight)))  -- Define position for the text inside the panel
     let textRect = Rectangle textPos (V2 textWidth textHeight)
 
     -- Draw white background panel
     rendererDrawColor renderer $= V4 255 255 255 255  -- White color for panel
-    fillRect renderer (Just panelRect)
 
     -- Render the text
     SDL.copy renderer texture Nothing (Just textRect)
@@ -205,12 +274,18 @@ gameLoop frameRate renderer tmap smap kbd ville font argent frameCount citId bat
     let citizens = Sim.getAllCitizens villeWithUpdatedCitizens
     mapM_ (\citizen -> drawCitizen renderer tmap citizen) citizens
 
+    displayPanel renderer font
     -- Display current money
     displayMoney renderer font updatedArgent
+
+    displayPollution renderer font (Sim.pollutionScore villeWithUpdatedCitizens)
+
+    displaySecurityScore renderer font (Sim.safetyScore villeWithUpdatedCitizens)
     -- Display citizen counts
     displayCitizenCount renderer font villeWithUpdatedCitizens
     -- Display mouse coordinates
     displayMouseCoordinates renderer font mouseState
+
 
     present renderer
     endTime <- time
