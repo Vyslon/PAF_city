@@ -9,6 +9,7 @@ import Data.List (find)
 import Data.Maybe (fromMaybe)
 import qualified PathFind as PathFind
 import Data.Maybe (fromJust, fromMaybe)
+import Test.QuickCheck
 
 
 data Coord = C {cx :: Int, cy :: Int} deriving (Eq, Ord)
@@ -1324,4 +1325,3 @@ countBuildingsNearCommissariats ville =
     
     isCommissariat (Commissariat _ _ _) = True
     isCommissariat _ = False
-    

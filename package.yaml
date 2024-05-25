@@ -28,6 +28,9 @@ dependencies:
 - sdl2-ttf
 - text
 - pqueue
+- QuickCheck
+- hspec >= 2.7.10
+
 
 library:
   source-dirs: src
@@ -56,3 +59,4 @@ tests:
     dependencies:
     - minijeu
     - QuickCheck
+    - hspec
