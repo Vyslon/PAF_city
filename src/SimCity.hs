@@ -315,6 +315,21 @@ getForme (Atelier forme _ _ _ _  ) = forme
 getForme (Epicerie forme _ _ _ _  ) = forme
 getForme (Commissariat forme _ _ )= forme
 
+
+getCapacity :: Batiment -> Int
+getCapacity (Cabane _ _ capacity _ _) = capacity
+getCapacity (Epicerie _ _ capacity _ _) = capacity
+getCapacity (Atelier _ _ capacity _ _) = capacity
+getCapacity _ = 0  -- Return 0 for buildings without a defined capacity
+
+
+getResidents :: Batiment -> [CitId]
+getResidents (Cabane _ _ _ residents _) = residents
+getResidents (Epicerie _ _ _ workers _) = workers
+getResidents (Atelier _ _ _ workers _) = workers
+getResidents _ = []  -- Return an empty list for buildings without residents/workers
+
+
 prop_verifyEntry::Batiment -> Bool
 prop_verifyEntry batiment = adjacent (getEntry batiment) (getForme batiment) 
 
@@ -616,9 +631,9 @@ moneyFromZone zone = sum $ map moneyFromBuilding (buildingsFromZone zone)
 
 -- Calculer l'argent d'un bâtiment
 moneyFromBuilding :: Batiment -> Int
-moneyFromBuilding (Epicerie (Rectangle  w h)   workers ) = 30 * length workers
-moneyFromBuilding (Cabane   n  ) = 20 * n
-moneyFromBuilding (Atelier (Rectangle  w h)   workers ) = 30 * length workers
+moneyFromBuilding (Epicerie (Rectangle _ w h) _ _ _ _) = w * h
+moneyFromBuilding (Cabane _ _ n _ _) = 20 * n
+moneyFromBuilding (Atelier (Rectangle _ w h) _ _ _ _) = w * h  -- Si vous souhaitez également accumuler de l'argent pour les ateliers
 moneyFromBuilding _ = 0  -- Pour tous les autres types ou formes non gérées
 
 {-    
@@ -1103,14 +1118,39 @@ assignWorkToHabitant :: CitId -> BatId -> Ville -> Maybe Ville
 assignWorkToHabitant citId batId ville = 
     case Map.lookup citId (viCit ville) of
         Just (Habitant coord info (maison, _, courses) occupation) ->
-            case findBuilding batId ville of
-                Just buildingCoord ->
-                    let newCitoyen = Habitant buildingCoord info (maison, Just batId, courses) Travaille
-                        updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
-                    in Just ville { viCit = updatedCitoyens }
+            case findBuildingById batId (getAllBuildings ville) of
+                Just building ->
+                    case addCitizenToBuilding citId building of
+                        Just updatedBuilding ->
+                            let newCitoyen = Habitant coord info (maison, Just batId, courses) Travaille
+                                updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
+                                updatedVille = updateVilleWithBuilding updatedBuilding ville
+                            in Just updatedVille
+                        Nothing -> trace ("Building capacity exceeded for BatId: " ++ show batId) Nothing
                 Nothing -> trace ("Building not found for BatId: " ++ show batId) Nothing
         _ -> trace ("Habitant not found for CitId: " ++ show citId) Nothing
 
+
+
+updateResidents :: ([CitId] -> [CitId]) -> Batiment -> Batiment
+updateResidents f (Cabane forme coord capacite residents batId) = Cabane forme coord capacite (f residents) batId
+updateResidents f (Atelier forme coord capacite residents batId) = Atelier forme coord capacite (f residents) batId
+updateResidents f (Epicerie forme coord capacite residents batId) = Epicerie forme coord capacite (f residents) batId
+updateResidents f other = other
+
+
+replaceBuilding :: Batiment -> [Batiment] -> [Batiment]
+replaceBuilding updatedBuilding = map (\b -> if getBatId b == getBatId updatedBuilding then updatedBuilding else b)
+
+
+addCitizenToBuilding :: CitId -> Batiment -> Maybe Batiment
+addCitizenToBuilding citId building = 
+    if length (getResidents building) < getCapacity building
+    then Just (updateResidents (citId:) building)
+    else Nothing
+
+findBuildingById :: BatId -> [Batiment] -> Maybe Batiment
+findBuildingById batId = find (\b -> getBatId b ==  batId)  
 -- Trouver un habitant sans travail
 findFirstHabitantId :: Ville -> Maybe CitId
 findFirstHabitantId ville = 

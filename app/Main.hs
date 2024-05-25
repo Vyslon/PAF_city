@@ -6,6 +6,7 @@ import Data.List (foldl')
 import Foreign.C.Types (CInt(..))
 import SDL 
 import SDL.Time (time, delay)
+import Data.Maybe (fromMaybe)
 import Linear (V4(..))
 import TextureMap (TextureMap, TextureId(..))
 import qualified TextureMap as TM
@@ -91,7 +92,7 @@ getCitizenArea citizen =
 loadBackgroundSprite :: Renderer -> TextureMap -> SpriteMap -> IO SpriteMap
 loadBackgroundSprite renderer tmap smap = do
     let backgroundTextureId = TextureId "background"  -- Assurez-vous que cette ID correspond à une texture chargée dans tmap
-    let backgroundArea = S.mkArea 0 0 640 480  -- Taille de l'arrière-plan
+    let backgroundArea = S.mkArea 0 0 800 800  -- Taille de l'arrière-plan
     let backgroundSprite = createBuildingSprite backgroundTextureId backgroundArea
     return $ SM.addSprite (SpriteId "background") backgroundSprite smap
 
@@ -149,13 +150,42 @@ displayCitizenCount renderer font ville = do
     SDL.copy renderer texture Nothing (Just textRect)
     SDL.destroyTexture texture  -- Destroy the texture to clean up
 
+displayMouseCoordinates :: Renderer -> TTF.Font -> MyMouse -> IO ()
+displayMouseCoordinates renderer font mouse = do
+    let text = pack $ "Coordonnées souris: [X = " ++ show (MS.mouseX mouse) ++ ", Y = " ++ show (MS.mouseY mouse) ++ "]"
+    let color = V4 0 0 0 255  -- Black color for text
+    surface <- TTF.blended font color text  -- Create anti-aliased text surface
+    texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
+    SDL.freeSurface surface  -- Free the surface after creating the texture
+    texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
+
+    let textWidth = SDL.textureWidth texInfo
+    let textHeight = SDL.textureHeight texInfo
+    let padding = 10
+    let panelWidth = textWidth + 2 * padding
+    let panelHeight = textHeight + 2 * padding
+
+    let panelPos = P (V2 (800 - panelWidth - 10) 50)  -- Define position for the panel in the top-right corner
+    let panelRect = Rectangle panelPos (V2 panelWidth panelHeight)
+
+    let textPos = P (V2 (800 - textWidth - padding - 10) (padding + 50))  -- Define position for the text inside the panel
+    let textRect = Rectangle textPos (V2 textWidth textHeight)
+
+    -- Draw white background panel
+    rendererDrawColor renderer $= V4 255 255 255 255  -- White color for panel
+    fillRect renderer (Just panelRect)
+
+    -- Render the text
+    SDL.copy renderer texture Nothing (Just textRect)
+    SDL.destroyTexture texture  -- Destroy the texture to clean up
+
 -- Main game loop
-gameLoop :: (RealFrac a, Show a) => a -> Renderer -> TextureMap -> SpriteMap -> K.KeyState -> Sim.Ville -> TTF.Font -> Int -> Int -> Sim.CitId -> Sim.BatId -> IO ()
-gameLoop frameRate renderer tmap smap kbd ville font argent frameCount citId batId = do
+gameLoop :: (RealFrac a, Show a) => a -> Renderer -> TextureMap -> SpriteMap -> K.KeyState -> Sim.Ville -> TTF.Font -> Int -> Int -> Sim.CitId -> Sim.BatId -> Maybe MS.MyMouse -> IO ()
+gameLoop frameRate renderer tmap smap kbd ville font argent frameCount citId batId currentMouseState = do
     startTime <- time
     events <- pollEvents
     let kbd' = K.handleEvents events kbd
-    let mouseState = MS.handleEventsMousePos events (MS.MyMouse False False (-1) (-1))
+    let mouseState = MS.handleEventsMousePos events (fromMaybe (MS.MyMouse False False (-1) (-1)) currentMouseState)
 
     -- Update the game state based on mouse events
     (updatedVille, newBatId, updatedArgent) <- MS.handleMouseEvents mouseState ville argent renderer tmap citId batId
@@ -179,6 +209,8 @@ gameLoop frameRate renderer tmap smap kbd ville font argent frameCount citId bat
     displayMoney renderer font updatedArgent
     -- Display citizen counts
     displayCitizenCount renderer font villeWithUpdatedCitizens
+    -- Display mouse coordinates
+    displayMouseCoordinates renderer font mouseState
 
     present renderer
     endTime <- time
@@ -197,7 +229,7 @@ gameLoop frameRate renderer tmap smap kbd ville font argent frameCount citId bat
                                else (villeWithUpdatedCitizens, citId)
     let finalVille = Sim.updateCitizens newVille
 
-    unless (K.keyPressed KeycodeEscape kbd') $ gameLoop frameRate renderer tmap smap kbd' finalVille font newArgent newFrameCount newCitId newBatId
+    unless (K.keyPressed KeycodeEscape kbd') $ gameLoop frameRate renderer tmap smap kbd' finalVille font newArgent newFrameCount newCitId newBatId (Just mouseState)
 
 
 
@@ -292,7 +324,7 @@ loadSprites renderer tmap smapInitial = do
     let smapWithImproved = foldl' (\smap (id, sprite) -> SM.addSprite id sprite smap) updatedSmap [improvedCabane, improvedAtelier, improvedEpicerie]
 
     -- Créer et ajouter le sprite de background
-    let backgroundSprite = createBuildingSprite (TextureId "background") (S.mkArea 0 0 640 480)
+    let backgroundSprite = createBuildingSprite (TextureId "background") (S.mkArea 0 0 800 800)
     let finalSmap = SM.addSprite (SpriteId "background") backgroundSprite smapWithImproved
 
     return finalSmap
@@ -364,4 +396,4 @@ main = do
     putStrLn $ "Does the city respect the property? " ++ show villeRespectsProperty
 
     -- Proceed with the game loop
-    gameLoop 60 renderer tmap smap kbd ville font argent 0 (Sim.CitId 0) (Sim.BatId 0)   -- Pass the font to the game loop
+    gameLoop 60 renderer tmap smap kbd ville font argent 0 (Sim.CitId 0) (Sim.BatId 0) Nothing  -- Pass the font to the game loop
