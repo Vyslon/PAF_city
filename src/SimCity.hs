@@ -242,6 +242,7 @@ prop_ville_sansCollision ville = Map.foldr step True (viZones ville)
 
 verifieRouteCentraleCable ::Zone -> Bool
 verifieRouteCentraleCable (Route _) = True
+verifieRouteCentraleCable (Eau _) = True
 verifieRouteCentraleCable (Cable _) = True
 verifieRouteCentraleCable (ZE _) = True
 verifieRouteCentraleCable _ = False
