@@ -1300,7 +1300,7 @@ safetyScore :: Ville -> Int
 safetyScore ville =
     let unemployedCount = countUnemployedCitizens ville
         buildingsNearCommissariatsCount = countBuildingsNearCommissariats ville
-    in buildingsNearCommissariatsCount * 10 - unemployedCount
+    in buildingsNearCommissariatsCount * 10 - unemployedCount * 20
 
 
 countUnemployedCitizens :: Ville -> Int
