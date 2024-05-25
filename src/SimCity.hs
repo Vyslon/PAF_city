@@ -1264,3 +1264,63 @@ updateZoneWithBuildings :: Zone -> [Batiment] -> Zone
 updateZoneWithBuildings (ZR forme _) buildings = ZR forme buildings
 updateZoneWithBuildings (ZI forme _) buildings = ZI forme buildings
 updateZoneWithBuildings (ZC forme _) buildings = ZC forme buildings
+
+-- Fonction pour calculer le coût de maintient de la ville 
+cityCost :: Ville -> Int
+cityCost ville = 
+    Map.foldr step 0 (viZones ville) 
+    where
+        step (ZE _) acc = acc +2000 -- la ZE coûte 2000 à entretenir
+        step (Cable _) acc= 200 + acc -- les cables aussi coûte de l'argent
+        step (Admin _ _) acc= acc + 1000 -- la popo coûte aussi faut bien qu'ils mangent
+        step (Eau _)acc = acc + 300 -- l'eau aussi, on entretient pour garder un bon score de pollution
+        step _ acc= acc -- le reste est considéré comme un investissement 
+
+
+--Fonction pour calculer le score de pollution, en effet les cables et la zone electrique polluent, cependant l'eau 
+-- permet de baisser ce score
+pollutionScore:: Ville -> Int
+pollutionScore ville = 
+     Map.foldr step 0 (viZones ville) 
+    where
+        step (ZE _) acc = acc +20 
+        step (Cable _) acc= 5 + acc
+        step (Eau _)acc = acc + 20 
+        step _ acc= acc
+
+
+getCommissariats :: Ville -> [Batiment]
+getCommissariats ville = filter isCommissariat (getAllBuildings ville)
+  where
+    isCommissariat (Commissariat _ _ _) = True
+    isCommissariat _ = False
+
+
+safetyScore :: Ville -> Int
+safetyScore ville =
+    let unemployedCount = countUnemployedCitizens ville
+        buildingsNearCommissariatsCount = countBuildingsNearCommissariats ville
+    in buildingsNearCommissariatsCount * 10 - unemployedCount
+
+
+countUnemployedCitizens :: Ville -> Int
+countUnemployedCitizens ville =
+    length $ filter isUnemployed (Map.elems (viCit ville))
+  where
+    isUnemployed (Habitant _ _ _ Chomage) = True
+    isUnemployed _ = False
+
+
+countBuildingsNearCommissariats :: Ville -> Int
+countBuildingsNearCommissariats ville =
+    length $ filter isNearCommissariat (getAllBuildings ville)
+  where
+    commissariats = getCommissariats ville
+    isNearCommissariat building = any (\(Commissariat coord _ _) -> distance (getEntry building) coord <= 200) commissariats
+
+    getCommissariats :: Ville -> [Batiment]
+    getCommissariats ville = filter isCommissariat (getAllBuildings ville)
+    
+    isCommissariat (Commissariat _ _ _) = True
+    isCommissariat _ = False
+    
