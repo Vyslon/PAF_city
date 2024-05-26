@@ -102,10 +102,9 @@ zoneColor (Sim.Cable _) = V4 192 192 192 255 -- Silver for cables
 
 
 
--- Function to create and display a colored rectangle on the screen
 createColoredSprite :: Renderer -> V4 Word8 -> Rectangle CInt -> IO ()
 createColoredSprite renderer color area = do
-    SDL.rendererDrawColor renderer SDL.$= color  -- Set the drawing color
-    SDL.fillRect renderer (Just area)  -- Draw the filled rectangle
+    SDL.rendererDrawColor renderer SDL.$= color  
+    SDL.fillRect renderer (Just area) 
 
 

@@ -28,36 +28,28 @@ import SDL (initialize, InitFlag(InitVideo, InitAudio))
 import Data.IORef
 import System.IO.Unsafe (unsafePerformIO)
 
--- Custom initialization function
 customInitialize :: IO ()
 customInitialize = do
-    initialize [InitVideo, InitAudio]  -- Initialize necessary SDL subsystems
-    TTF.initialize  -- Initialize the SDL.Font subsystem
+    initialize [InitVideo, InitAudio]
+    TTF.initialize  
 
 cleanup :: IO ()
 cleanup = do
-    TTF.quit  -- Quit the SDL.Font subsystem
-    SDL.quit  -- Quit SDL
+    TTF.quit  
+    SDL.quit  
 
 
 
--- Function to convert Forme to SDL Area
 formeToArea :: Sim.Forme -> S.Area
 formeToArea (Sim.Rectangle (Sim.C x y) w h) = S.mkArea (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
 formeToArea _ = error "Unsupported Forme type for conversion to Area"
 
--- Function to draw all zones
 drawZones :: Renderer -> TextureMap -> [Sim.Zone] -> IO ()
 drawZones renderer tmap zones = mapM_ (drawZone renderer tmap) zones
 
 
 
 
--- drawZone :: Renderer -> Sim.Zone -> IO ()
--- drawZone renderer zone = do
---     let color = S.zoneColor zone  -- Assuming zoneColor is a function defined in Sprite.hs
---     let area = formeToArea (Sim.zoneForme zone)
---     S.createColoredSprite renderer color area  -- Adjust if needed
 
 drawZone :: Renderer -> TextureMap -> Sim.Zone -> IO ()
 drawZone renderer tmap zone = do
@@ -65,34 +57,31 @@ drawZone renderer tmap zone = do
     let textureId = getTextureIdForZone zone
     let texture = TM.fetchTexture textureId tmap
     let area = formeToArea forme
-    SDL.copy renderer texture Nothing (Just area)  -- Use SDL.copy to render the texture
-
+    SDL.copy renderer texture Nothing (Just area)  
 drawBuilding :: Renderer -> TextureMap -> Sim.Batiment -> IO ()
 drawBuilding renderer tmap building = do
     let forme = Sim.getForme building
     let textureId = getTextureIdForBuilding building
     let texture = TM.fetchTexture textureId tmap
     let area = formeToArea forme
-    SDL.copy renderer texture Nothing (Just area)  -- Use SDL.copy to render the texture
-
+    SDL.copy renderer texture Nothing (Just area)
 drawCitizen :: Renderer -> TextureMap -> Sim.Citoyen -> IO ()
 drawCitizen renderer tmap citizen = do
     let textureId = getTextureIdForCitoyen citizen
     let texture = TM.fetchTexture textureId tmap
-    let area = getCitizenArea citizen  -- Calculate the area for this citizen
+    let area = getCitizenArea citizen 
     SDL.copy renderer texture Nothing (Just area)
 
--- Helper function to calculate the SDL area from citizen's position
 getCitizenArea :: Sim.Citoyen -> S.Area
 getCitizenArea citizen = 
-    let (Sim.C x y) = Sim.citizenCoord citizen  -- Assume we can get the coordinates directly
-    in S.mkArea (fromIntegral x) (fromIntegral y) 30 80  -- Width = 30, Height = 80
+    let (Sim.C x y) = Sim.citizenCoord citizen
+    in S.mkArea (fromIntegral x) (fromIntegral y) 30 80  -- largeur = 30, hauteur = 80
 
 -- Load background image
 loadBackgroundSprite :: Renderer -> TextureMap -> SpriteMap -> IO SpriteMap
 loadBackgroundSprite renderer tmap smap = do
-    let backgroundTextureId = TextureId "background"  -- Assurez-vous que cette ID correspond à une texture chargée dans tmap
-    let backgroundArea = S.mkArea 0 0 800 800  -- Taille de l'arrière-plan
+    let backgroundTextureId = TextureId "background"  
+    let backgroundArea = S.mkArea 0 0 800 800  -- Taille du background 
     let backgroundSprite = createBuildingSprite backgroundTextureId backgroundArea
     return $ SM.addSprite (SpriteId "background") backgroundSprite smap
 
@@ -107,31 +96,29 @@ loadPerso rdr path tmap smap = do
 -- Function to display the current money in the game
 displayMoney :: Renderer -> TTF.Font -> Int -> IO ()
 displayMoney renderer font money = do
-    let text = pack $ "Money: " ++ show money ++ " €"  -- Prepare text
-    let color = V4 0 155 0 0  -- White color
-    surface <- TTF.blended font color text  -- Create anti-aliased text surface
-    texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
-    SDL.freeSurface surface  -- Free the surface after creating the texture
-    texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
+    let text = pack $ "Money: " ++ show money ++ " €"  
+    let color = V4 0 155 0 0  
+    surface <- TTF.blended font color text  
+    texture <- SDL.createTextureFromSurface renderer surface 
+    SDL.freeSurface surface 
+    texInfo <- SDL.queryTexture texture  
     let textWidth = SDL.textureWidth texInfo
     let textHeight = SDL.textureHeight texInfo
     let padding = 10
     let textPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 3 * (textHeight)))
     let textRect = Rectangle textPos (V2 (SDL.textureWidth texInfo) (SDL.textureHeight texInfo))
-    SDL.copy renderer texture Nothing (Just textRect)  -- Render the texture
-    SDL.destroyTexture texture  -- Destroy the texture to clean up
+    SDL.copy renderer texture Nothing (Just textRect)  
+    SDL.destroyTexture texture 
 
 
--- Function to display the number of immigrants, emigrants, and habitants
-displayCitizenCount :: Renderer -> TTF.Font -> Sim.Ville -> IO ()
+-- Fonction permettant d’afficher le nombre d’immigrants, d’émigrants et d’habitantsdisplayCitizenCount :: Renderer -> TTF.Font -> Sim.Ville -> IO ()
 displayCitizenCount renderer font ville = do
     let (immigrants, emigrants, habitants) = Sim.countCitizens(ville)
     let immigrantsText = pack $ "Immigrants: " ++ show immigrants
     let emigrantsText = pack $ "Emigrants: " ++ show emigrants
     let habitantsText = pack $ "Habitants: " ++ show habitants
-    let color = V4 0 0 0 255  -- Black color for text
+    let color = V4 0 0 0 255  -- Couleure noire pour le texte
 
-    -- Create surfaces and textures for each line of text
     immigrantsSurface <- TTF.blended font color immigrantsText
     emigrantsSurface <- TTF.blended font color emigrantsText
     habitantsSurface <- TTF.blended font color habitantsText
@@ -152,7 +139,6 @@ displayCitizenCount renderer font ville = do
     let textHeight = SDL.textureHeight immigrantsTexInfo
     let padding = 10
 
-    -- Define positions for each line of text inside the panel
     let immigrantsPos = P (V2 (800 - textWidth - padding - 10) (10 + padding))
     let emigrantsPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + textHeight))
     let habitantsPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 2 * (textHeight)))
@@ -161,12 +147,10 @@ displayCitizenCount renderer font ville = do
     let emigrantsRect = Rectangle emigrantsPos (V2 textWidth textHeight)
     let habitantsRect = Rectangle habitantsPos (V2 textWidth textHeight)
 
-    -- Render the text
     SDL.copy renderer immigrantsTexture Nothing (Just immigrantsRect)
     SDL.copy renderer emigrantsTexture Nothing (Just emigrantsRect)
     SDL.copy renderer habitantsTexture Nothing (Just habitantsRect)
 
-    -- Destroy the textures to clean up
     SDL.destroyTexture immigrantsTexture
     SDL.destroyTexture emigrantsTexture
     SDL.destroyTexture habitantsTexture
@@ -175,80 +159,75 @@ displayCitizenCount renderer font ville = do
 displayPanel :: Renderer -> TTF.Font -> IO ()
 displayPanel renderer font = do
     let text = pack $ "Panneau"
-    let color = V4 0 0 0 255  -- Black color for text
-    surface <- TTF.blended font color text  -- Create anti-aliased text surface
-    texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
-    -- SDL.freeSurface surface  -- Free the surface after creating the texture
-    -- texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
-    texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
+    let color = V4 0 0 0 255  
+    surface <- TTF.blended font color text 
+    texture <- SDL.createTextureFromSurface renderer surface  
+    texInfo <- SDL.queryTexture texture  
     let textWidth = SDL.textureWidth texInfo
     let textHeight = SDL.textureHeight texInfo
     let padding = 10
     let panelWidth = 21 * padding
     let panelHeight = (textHeight + padding) * 6 + padding
-    let panelPos = P (V2 (800 - panelWidth) 0)  -- Define position for the panel in the top-right corner
+    let panelPos = P (V2 (800 - panelWidth) 0) 
     let panelRect = Rectangle panelPos (V2 panelWidth panelHeight)
-    rendererDrawColor renderer $= V4 255 255 255 255  -- White color for panel
+    rendererDrawColor renderer $= V4 255 255 255 255 
     fillRect renderer (Just panelRect)
 
-    -- SDL.destroyTexture texture  -- Destroy the texture to clean up
 
 displayPollution :: Renderer -> TTF.Font -> Int -> IO ()
 displayPollution renderer font pollution = do
-    let text = pack $ "Pollution : " ++ show pollution  -- Prepare text
-    let color = V4 153 102 51 0  -- White color
-    surface <- TTF.blended font color text  -- Create anti-aliased text surface
-    texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
-    SDL.freeSurface surface  -- Free the surface after creating the texture
-    texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
+    let text = pack $ "Pollution : " ++ show pollution  
+    let color = V4 153 102 51 0  
+    surface <- TTF.blended font color text  
+    texture <- SDL.createTextureFromSurface renderer surface  
+    SDL.freeSurface surface  
+    texInfo <- SDL.queryTexture texture  
     let textWidth = SDL.textureWidth texInfo
     let textHeight = SDL.textureHeight texInfo
     let padding = 10
     let textPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 5 * (textHeight)))
     let textRect = Rectangle textPos (V2 (SDL.textureWidth texInfo) (SDL.textureHeight texInfo))
-    SDL.copy renderer texture Nothing (Just textRect)  -- Render the texture
-    SDL.destroyTexture texture  -- Destroy the texture to clean up
+    SDL.copy renderer texture Nothing (Just textRect)  
+    SDL.destroyTexture texture  
 
 displaySecurityScore :: Renderer -> TTF.Font -> Int -> IO ()
 displaySecurityScore renderer font security = do
-    let text = pack $ "Sécurité : " ++ show security  -- Prepare text
-    let color = V4 0 0 180 0  -- White color
-    surface <- TTF.blended font color text  -- Create anti-aliased text surface
-    texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
-    SDL.freeSurface surface  -- Free the surface after creating the texture
-    texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
+    let text = pack $ "Sécurité : " ++ show security  
+    let color = V4 0 0 180 0  
+    surface <- TTF.blended font color text 
+    texture <- SDL.createTextureFromSurface renderer surface  
+    SDL.freeSurface surface  
+    texInfo <- SDL.queryTexture texture  
     let textWidth = SDL.textureWidth texInfo
     let textHeight = SDL.textureHeight texInfo
     let padding = 10
     let textPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 6 * (textHeight)))
     let textRect = Rectangle textPos (V2 (SDL.textureWidth texInfo) (SDL.textureHeight texInfo))
-    SDL.copy renderer texture Nothing (Just textRect)  -- Render the texture
-    SDL.destroyTexture texture  -- Destroy the texture to clean up
+    SDL.copy renderer texture Nothing (Just textRect)  
+    SDL.destroyTexture texture 
 
 displayMouseCoordinates :: Renderer -> TTF.Font -> MyMouse -> IO ()
 displayMouseCoordinates renderer font mouse = do
     let text = pack $ "[X = " ++ show (MS.mouseX mouse) ++ ", Y = " ++ show (MS.mouseY mouse) ++ "]"
-    let color = V4 0 0 0 255  -- Black color for text
-    surface <- TTF.blended font color text  -- Create anti-aliased text surface
-    texture <- SDL.createTextureFromSurface renderer surface  -- Create texture from surface
-    SDL.freeSurface surface  -- Free the surface after creating the texture
-    texInfo <- SDL.queryTexture texture  -- Get texture info to find out dimensions
+    let color = V4 0 0 0 255 
+    surface <- TTF.blended font color text  
+    texture <- SDL.createTextureFromSurface renderer surface 
+    SDL.freeSurface surface  
+    texInfo <- SDL.queryTexture texture  
 
     let textWidth = SDL.textureWidth texInfo
     let textHeight = SDL.textureHeight texInfo
     let padding = 10
 
-    let textPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 4 * (textHeight)))  -- Define position for the text inside the panel
+    let textPos = P (V2 (800 - textWidth - padding - 10) (10 + padding + 4 * (textHeight))) 
     let textRect = Rectangle textPos (V2 textWidth textHeight)
 
-    -- Draw white background panel
-    rendererDrawColor renderer $= V4 255 255 255 255  -- White color for panel
+    rendererDrawColor renderer $= V4 255 255 255 255  
 
-    -- Render the text
     SDL.copy renderer texture Nothing (Just textRect)
-    SDL.destroyTexture texture  -- Destroy the texture to clean up
+    SDL.destroyTexture texture 
 
--- Main game loop
+--Main game loop
 gameLoop :: (RealFrac a, Show a) => a -> Renderer -> TextureMap -> SpriteMap -> K.KeyState -> Sim.Ville -> TTF.Font -> Int -> Int -> Sim.CitId -> Sim.BatId -> Maybe MS.MyMouse -> IO ()
 gameLoop frameRate renderer tmap smap kbd ville font argent frameCount citId batId currentMouseState = do
     startTime <- time
@@ -286,26 +265,31 @@ gameLoop frameRate renderer tmap smap kbd ville font argent frameCount citId bat
     -- Display mouse coordinates
     displayMouseCoordinates renderer font mouseState
 
-
     present renderer
     endTime <- time
     let elapsed = endTime - startTime
-    let delayTime = max 0 (ceiling (1000 / frameRate - elapsed * 1000))
-    threadDelay (delayTime * 1000)
+    let delayTime = max 0 (ceiling (2000 / frameRate - elapsed * 1000)) -- Augmenté pour doubler le délai
+    threadDelay (delayTime * 1000) -- Convertir millisecondes en microsecondes
 
     let newFrameCount = frameCount + 1
     let newArgent = if newFrameCount `mod` 500 == 0
                     then updatedArgent + 100 + (Sim.calculateMoney villeWithUpdatedCitizens)
                     else updatedArgent
 
-    -- Add immigrants every 500 frames
+
     let (newVille, newCitId) = if newFrameCount `mod` 500 == 0
                                then Sim.addImmigrants 1 villeWithUpdatedCitizens citId
                                else (villeWithUpdatedCitizens, citId)
-    let finalVille = Sim.updateCitizens newVille
 
-    unless (K.keyPressed KeycodeEscape kbd') $ gameLoop frameRate renderer tmap smap kbd' finalVille font newArgent newFrameCount newCitId newBatId (Just mouseState)
+    let finalVille = if newFrameCount `mod` 10000 == 0
+                     then Sim.updateCitizens newVille
+                     else newVille
 
+    let finalVilleApresEmigrants = if newFrameCount `mod` 200 == 0
+                    then Sim.checkAndTransformCitizens finalVille
+                    else finalVille
+
+    unless (K.keyPressed KeycodeEscape kbd' || newArgent < 0) $ gameLoop frameRate renderer tmap smap kbd' finalVilleApresEmigrants font newArgent newFrameCount newCitId newBatId (Just mouseState)
 
 
 -- Handle mouse click on zones
@@ -315,11 +299,10 @@ handleMouseClick mouse zones = do
     let mouseY = MS.mouseY mouse
     mapM_ (checkZoneClick (mouseX, mouseY)) zones
 
--- Check if mouse click is within a zone and print limits
 checkZoneClick :: (Int, Int) -> Sim.Zone -> IO ()
 checkZoneClick (x, y) zone = do
     let forme = Sim.zoneForme zone
-    let (nord, sud, ouest, est) = Sim.limites forme  -- Adjust to use named boundaries correctly
+    let (nord, sud, ouest, est) = Sim.limites forme  
     when (x >= ouest && x <= est && y >= sud && y <= nord) $ do
         putStrLn $ "Zone clicked: " ++ show (Sim.limites forme)
 
@@ -424,7 +407,8 @@ createCitoyenSprite textureId area =
     S.defaultScale $ S.addImage S.createEmptySprite $ S.createImage textureId area
 
 
--- Function to determine the texture ID based on the building type
+
+--Selon la capacité du batiment on change son sprite
 getTextureIdForBuilding :: Sim.Batiment -> TextureId
 getTextureIdForBuilding (Sim.Cabane _ _ capacite _ _)
     | capacite > 10 = TextureId "cabane_amelioree"
@@ -455,20 +439,18 @@ getTextureIdForCitoyen (Sim.Emigrant _ _) = TextureId "emigrant"
 
 main :: IO ()
 main = do
-    customInitialize  -- Use the custom initialization for SDL and fonts
+    customInitialize  
     window <- createWindow (pack "Minijeu") $ defaultWindow { windowInitialSize = V2 800 800 }
     renderer <- createRenderer window (-1) defaultRenderer
-    font <- TTF.load "assets/Roboto.ttf" 24  -- Load the font; specify the correct path and size
+    font <- TTF.load "assets/Roboto.ttf" 24  
     
     tmap <- loadBuildingTextures renderer TM.createTextureMap
     smap <- loadSprites renderer tmap SM.createSpriteMap
     let kbd = K.createKeyState
-    let ville = Sim.createInitialVille  -- Initialize your city here
+    let ville = Sim.createInitialVille  
     let argent = 100000
 
-    -- Check if the city respects the property
     let villeRespectsProperty = Sim.prop_ville ville
     putStrLn $ "Does the city respect the property? " ++ show villeRespectsProperty
 
-    -- Proceed with the game loop
-    gameLoop 60 renderer tmap smap kbd ville font argent 0 (Sim.CitId 0) (Sim.BatId 0) Nothing  -- Pass the font to the game loop
+    gameLoop 60 renderer tmap smap kbd ville font argent 0 (Sim.CitId 0) (Sim.BatId 0) Nothing 

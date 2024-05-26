@@ -10,6 +10,16 @@
   (major1) == 0 && (major2) <  1 || \
   (major1) == 0 && (major2) == 1 && (minor) <= 0)
 #endif /* MIN_VERSION_minijeu */
+/* package QuickCheck-2.15 */
+#ifndef VERSION_QuickCheck
+#define VERSION_QuickCheck "2.15"
+#endif /* VERSION_QuickCheck */
+#ifndef MIN_VERSION_QuickCheck
+#define MIN_VERSION_QuickCheck(major1,major2,minor) (\
+  (major1) <  2 || \
+  (major1) == 2 && (major2) <  15 || \
+  (major1) == 2 && (major2) == 15 && (minor) <= 0)
+#endif /* MIN_VERSION_QuickCheck */
 /* package base-4.17.1.0 */
 #ifndef VERSION_base
 #define VERSION_base "4.17.1.0"
@@ -30,6 +40,16 @@
   (major1) == 0 && (major2) <  6 || \
   (major1) == 0 && (major2) == 6 && (minor) <= 7)
 #endif /* MIN_VERSION_containers */
+/* package hspec-2.11.8 */
+#ifndef VERSION_hspec
+#define VERSION_hspec "2.11.8"
+#endif /* VERSION_hspec */
+#ifndef MIN_VERSION_hspec
+#define MIN_VERSION_hspec(major1,major2,minor) (\
+  (major1) <  2 || \
+  (major1) == 2 && (major2) <  11 || \
+  (major1) == 2 && (major2) == 11 && (minor) <= 8)
+#endif /* MIN_VERSION_hspec */
 /* package linear-1.22 */
 #ifndef VERSION_linear
 #define VERSION_linear "1.22"
@@ -50,6 +70,16 @@
   (major1) == 0 && (major2) <  1 || \
   (major1) == 0 && (major2) == 1 && (minor) <= 0)
 #endif /* MIN_VERSION_minijeu */
+/* package pqueue-1.5.0.0 */
+#ifndef VERSION_pqueue
+#define VERSION_pqueue "1.5.0.0"
+#endif /* VERSION_pqueue */
+#ifndef MIN_VERSION_pqueue
+#define MIN_VERSION_pqueue(major1,major2,minor) (\
+  (major1) <  1 || \
+  (major1) == 1 && (major2) <  5 || \
+  (major1) == 1 && (major2) == 5 && (minor) <= 0)
+#endif /* MIN_VERSION_pqueue */
 /* package random-1.2.1.2 */
 #ifndef VERSION_random
 #define VERSION_random "1.2.1.2"

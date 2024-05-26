@@ -5,7 +5,7 @@ import SDL
 import qualified SimCity as Sim
 import qualified Data.Map as Map
 import TextureMap
-import Data.Maybe (isNothing, isJust, fromJust)  -- Ajout de l'importation nécessaire
+import Data.Maybe (isNothing, isJust, fromJust) 
 import Data.List (find)
 import System.IO (hFlush, stdout)
 import Data.List (foldl')
@@ -14,7 +14,6 @@ import Data.List (foldl')
 data MyMouse = MyMouse { gaucheActif :: Bool, droiteActif :: Bool, mouseX :: Int
                    , mouseY :: Int }
 
--- ((mouseButtonEventButton mbep) == ButtonLeft) && 
 
 handleEventMousePos :: Event -> MyMouse -> MyMouse 
 handleEventMousePos event (MyMouse left right mmX mmY) =
@@ -23,12 +22,12 @@ handleEventMousePos event (MyMouse left right mmX mmY) =
         if (mouseButtonEventButton mbep) == ButtonLeft then
             if mouseButtonEventMotion mbep == Pressed
                 then  let (P (V2 x y)) = mouseButtonEventPos mbep in MyMouse True False (fromIntegral x) (fromIntegral y)
-            else -- click released
+            else 
                 let (P (V2 x y)) = mouseButtonEventPos mbep in MyMouse False False (fromIntegral x) (fromIntegral y)
         else if (mouseButtonEventButton mbep) == ButtonRight then
             if mouseButtonEventMotion mbep == Pressed
                 then  let (P (V2 x y)) = mouseButtonEventPos mbep in MyMouse False True (fromIntegral x) (fromIntegral y)
-            else -- click released
+            else 
                 let (P (V2 x y)) = mouseButtonEventPos mbep in MyMouse False False (fromIntegral x) (fromIntegral y)
         else MyMouse False False mmX mmY
     MouseMotionEvent motion ->
@@ -58,7 +57,7 @@ deleteBuilding build zone = let buildings = (Sim.buildingsFromZone zone) in
     Sim.updateBuildingsFromZone newBuildings zone
 
 
-
+--Fonction pour gérer le clic, elle est appelée dans le gameloop
 handleMouseEvents :: MyMouse -> Sim.Ville -> Int -> Renderer -> TextureMap -> Sim.CitId -> Sim.BatId -> IO (Sim.Ville, Sim.BatId, Int)
 handleMouseEvents mouse ville argent renderer tmap citId batId = do
     let mX = mouseX mouse
@@ -74,7 +73,7 @@ handleMouseEvents mouse ville argent renderer tmap citId batId = do
                         newVille <- handleBuildingClick building ville
                         return (newVille, batId, argent)
                     Nothing -> do
-                        putStrLn "No building found at these coordinates."
+                        putStrLn "Aucun building ici."
                         maybeNewBuilding <- askForBuildingDetails mX mY batId zone
                         case maybeNewBuilding of
                             Just newBuilding -> do
@@ -85,11 +84,11 @@ handleMouseEvents mouse ville argent renderer tmap citId batId = do
                                         let (updatedVille, newArgent) = Sim.addBuildingToZone argent newBuilding zoneId ville
                                         return (updatedVille, newBatId, newArgent)
                                     Nothing -> do
-                                        putStrLn "Error: Zone ID not found."
+                                        putStrLn "Erreur: Zone ID non trouvée"
                                         return (ville, batId, argent)
                             Nothing -> return (ville, batId, argent)
             Nothing -> do
-                putStrLn "No zone found at these coordinates. Would you like to create a new zone here? (yes/no)"
+                putStrLn "Aucune zone ici, voulez-vous en créer une ? (yes/no)"
                 decision <- getLine
                 if decision == "yes" then do
                     maybeNewZone <- askForZoneDetails mX mY
@@ -117,7 +116,7 @@ handleMouseEvents mouse ville argent renderer tmap citId batId = do
                             case maybeZoneId of
                                 Just zoneId -> return (updateZone zoneId (deleteBuilding (fromJust maybeBuilding) zone) ville, batId, argent)
                                 Nothing -> do
-                                    putStrLn "No valid zone found for the coordinates."
+                                    putStrLn "Aucune zone valide pour ces coordonnées."
                                     return (ville, batId, argent)
                         _ -> return (ville, batId, argent)
                 else do
@@ -126,7 +125,7 @@ handleMouseEvents mouse ville argent renderer tmap citId batId = do
                     case maybeZoneId of
                         Just zoneId -> return (Sim.V (Map.delete zoneId (Sim.viZones ville)) (Sim.viCit ville), batId, argent)
                         Nothing -> do
-                            putStrLn "No valid zone found for the coordinates."
+                            putStrLn "Aucune zone valide pour ces coordonnées."
                             return (ville, batId, argent)
             Nothing -> return (ville, batId, argent)
     else

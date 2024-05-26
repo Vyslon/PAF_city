@@ -1,7 +1,6 @@
 module SimCity where
 import Debug.Trace (trace)
 import qualified Data.Map as Map
-import qualified Data.Map as Map
 import qualified Data.Map.Strict as MapS
 import qualified Data.PQueue.Min as PQ
 import Data.List (find)
@@ -9,7 +8,6 @@ import Data.List (find)
 import Data.Maybe (fromMaybe)
 import qualified PathFind as PathFind
 import Data.Maybe (fromJust, fromMaybe)
-import Test.QuickCheck
 
 
 data Coord = C {cx :: Int, cy :: Int} deriving (Eq, Ord)
@@ -110,7 +108,6 @@ adjacentes forme1 forme2 = nonChevauchement && (horizontalementAdjacente || vert
       (sud1 + marge >= nord2 && nord1 - marge <= sud2) &&
       ( (ouest1 <= est2 && ouest1 >= ouest2) || (est1 >= ouest2 && est1 <= est2) ||
         (ouest2 <= est1 && ouest2 >= ouest1) || (est2 >= ouest1 && est2 <= est1) )
--- à verifier
 
 
 newtype ZoneId = ZoneId Int deriving (Show,Eq, Ord)
@@ -184,6 +181,7 @@ instance Show Occupation where
 data Citoyen = Immigrant Coord (Int, Int, Int) Occupation
     | Habitant Coord (Int, Int, Int) (BatId, Maybe BatId, Maybe BatId) Occupation 
     | Emigrant Coord Occupation
+    deriving(Eq)
 
 instance Show Citoyen where
     show (Immigrant coord stats occupation) = 
@@ -206,7 +204,7 @@ zoneForme (ZE forme ) = forme
 zoneForme (Cable forme ) = forme
 
 
-data Ville = V { viZones :: Map.Map ZoneId Zone, viCit :: Map.Map CitId Citoyen }
+data Ville = V { viZones :: Map.Map ZoneId Zone, viCit :: Map.Map CitId Citoyen } deriving(Eq)
 
 instance Show Ville where
     show (V zones citoyens) = "Ville { Zones: " ++ show (Map.toList zones) ++ ", Citoyens: " ++ show (Map.toList citoyens) ++ " }"
@@ -243,7 +241,6 @@ prop_ville_sansCollision ville = Map.foldr step True (viZones ville)
 
 verifieRouteCentraleCable ::Zone -> Bool
 verifieRouteCentraleCable (Route _) = True
-verifieRouteCentraleCable (Eau _) = True
 verifieRouteCentraleCable (Cable _) = True
 verifieRouteCentraleCable (ZE _) = True
 verifieRouteCentraleCable _ = False
@@ -297,7 +294,8 @@ pre_construit ville zone =
 
 
 post_construit::Ville -> Zone -> Ville -> Bool
-post_construit villeAvant zone villeApres = (zonePresente (viZones villeApres) zone) && (Map.size (viZones villeApres) == Map.size (viZones villeAvant) + 1)
+post_construit villeAvant zone villeApres = 
+    (zonePresente (viZones villeApres) zone) && (Map.size (viZones villeApres) == Map.size (viZones villeAvant) + 1)
 
 zonePresente::Map.Map ZoneId Zone -> Zone -> Bool
 zonePresente map zoneATrouver =  any (== zoneATrouver) (Map.elems map)
@@ -322,19 +320,18 @@ getCapacity :: Batiment -> Int
 getCapacity (Cabane _ _ capacity _ _) = capacity
 getCapacity (Epicerie _ _ capacity _ _) = capacity
 getCapacity (Atelier _ _ capacity _ _) = capacity
-getCapacity _ = 0  -- Return 0 for buildings without a defined capacity
+getCapacity _ = 0  -- rend 0 pour les Commissariats
 
 
 getResidents :: Batiment -> [CitId]
 getResidents (Cabane _ _ _ residents _) = residents
 getResidents (Epicerie _ _ _ workers _) = workers
 getResidents (Atelier _ _ _ workers _) = workers
-getResidents _ = []  -- Return an empty list for buildings without residents/workers
+getResidents _ = []  -- Un comissariat n'a pas d'habitant 
 
 
 prop_verifyEntry::Batiment -> Bool
 prop_verifyEntry batiment = adjacent (getEntry batiment) (getForme batiment) 
-
 
 
 
@@ -344,13 +341,11 @@ getOccupants (Atelier _ _ n _ _) = n
 getOccupants (Epicerie _ _ n _ _) = n 
 getOccupants (Commissariat _ _ _) = 0
 
-
 verifyIntLessThanListLength :: Batiment -> Bool
-verifyIntLessThanListLength (Cabane _ _ n citIds _) = n <= length citIds
-verifyIntLessThanListLength (Atelier _ _ n citIds _) = n <= length citIds
-verifyIntLessThanListLength (Epicerie _ _ n citIds _) = n <= length citIds
+verifyIntLessThanListLength (Cabane _ _ capacite citIds _) = capacite >= length citIds
+verifyIntLessThanListLength (Atelier _ _ capacite citIds _) = capacite >= length citIds
+verifyIntLessThanListLength (Epicerie _ _ capacite citIds _) = capacite >= length citIds
 verifyIntLessThanListLength (Commissariat _ _ _) = True
-
 
 sous_fonction_entry_appart_route::Coord -> Ville -> Bool
 sous_fonction_entry_appart_route c ville = 
@@ -359,13 +354,13 @@ sous_fonction_entry_appart_route c ville =
         step zone acc = acc || ((verifieRoute zone) && (appartient c  (zoneForme zone) ))
 
 
--- Extract buildings from a Zone
+-- Extrait les batiments d'une zone
 buildingsFromZone :: Zone -> [Batiment]
 buildingsFromZone (ZR _ bldgs) = bldgs
 buildingsFromZone (ZI _ bldgs) = bldgs
 buildingsFromZone (ZC _ bldgs) = bldgs
 buildingsFromZone (Admin _ bldg) = [bldg]
-buildingsFromZone _ = []  -- Eau and Route have no buildings, idem for wires and electrical central
+buildingsFromZone _ = []  -- Eau,Route,ZE et Cable n'ont pas de batiment
 
 updateBuildingsFromZone :: [Batiment] -> Zone -> Zone
 updateBuildingsFromZone buildings (ZR tmp bldgs) = ZR tmp buildings
@@ -392,10 +387,10 @@ buildingInCorrectZone :: Batiment -> Zone -> Bool
 buildingInCorrectZone (Cabane _ _ _ _ _) (ZR _ _ )  = True
 buildingInCorrectZone (Atelier _ _ _ _ _) (ZI _ _ ) = True
 buildingInCorrectZone (Epicerie _ _ _ _ _) (ZC _ _ ) = True
-buildingInCorrectZone (Commissariat _ _ _) (Admin _ _ ) = True  -- Commissariats can be in any zone
-buildingInCorrectZone _ _ = False  -- Default case if none match
+buildingInCorrectZone (Commissariat _ _ _) (Admin _ _ ) = True 
+buildingInCorrectZone _ _ = False  -- Tout autre cas est faux.
 
--- Iterate over each zone in the city, and check every building in those zones
+-- On vérifie que chaque Zone a bien les batiments qui lui corresepondent.
 prop_zoningLaws :: Ville -> Bool
 prop_zoningLaws (V vizones _) =
   all checkZoneBuildings (Map.elems vizones )
@@ -405,7 +400,7 @@ prop_zoningLaws (V vizones _) =
     checkZoneBuildings (ZI _ bats) = all (`buildingInCorrectZone` (ZI undefined bats)) bats
     checkZoneBuildings (ZC _ bats) = all (`buildingInCorrectZone` (ZC undefined bats)) bats
     checkZoneBuildings (Admin _ bat) = buildingInCorrectZone bat (Admin undefined bat)
-    checkZoneBuildings _ = True  -- Eau and Route do not contain buildings
+    checkZoneBuildings _ = True  -- Eau,Route,ZE et Cable n'ont pas besoin de cette vérif
 
 
 {-Version nulle avec trop de pattern matching
@@ -419,10 +414,9 @@ prop_batiments_in_Zone (ZR forme bats) =
             let (x1,x2,y1,y2) = limites bat in
                 acc && (appartient x1 forme) && (appartient x2 forme) && (appartient y1 forme) && (appartient y2 forme)
 
-
 -}
 
--- Helper function to check if a building is within a given Forme
+--  Fonction auxiliaire, on verifie qu'un batiment est bien dans sa zone attribué géométriquement
 buildingWithinZone :: Batiment -> Forme -> Bool
 buildingWithinZone batiment zoneForme =
     let (nord, sud, ouest, est) = limites (getForme batiment)
@@ -432,20 +426,17 @@ buildingWithinZone batiment zoneForme =
         coinSudEst = C est sud
     in all (\coin -> appartient coin zoneForme) [coinNordOuest, coinNordEst, coinSudOuest, coinSudEst]
 
--- Generic property to verify buildings are within their respective zones
+-- On vérifie pour chaque Zone si le batiment est bien dedans
 prop_batiments_in_Zone :: Zone -> Bool
-prop_batiments_in_Zone (Eau _) = True
-prop_batiments_in_Zone (Route _) = True
 prop_batiments_in_Zone (ZR forme bats) = all (`buildingWithinZone` forme) bats
 prop_batiments_in_Zone (ZI forme bats) = all (`buildingWithinZone` forme) bats
 prop_batiments_in_Zone (ZC forme bats) = all (`buildingWithinZone` forme) bats
 prop_batiments_in_Zone (Admin forme bat) = buildingWithinZone bat forme
+prop_batiments_in_Zone _ = True
 
 
 
 
--- Faire demenagement d'un habitant,faire prop pour vérifier que l'habitant habite dans tel immeuble,
--- qu'il travaille dans tel truc, qu'il fait bien ses courses dans tel truc...
 
 
 changerOccupation::Citoyen->Occupation->Citoyen
@@ -480,6 +471,7 @@ invariantChangerOccupation citoyen new_occupation =
         _ -> False
 
 
+
 getOccupation::Citoyen ->Occupation
 getOccupation (Immigrant _ _ occ)  = occ
 getOccupation (Habitant _ _ _  occ)  = occ
@@ -501,14 +493,11 @@ addZone :: Zone -> Ville -> Ville
 addZone cable@(Cable _) ville = addCable cable ville
 addZone zone ville = 
    if pre_construit ville zone then
-       let villeApres = construit ville zone -- Suppose que Sim.addZone ajoute simplement la zone sans autres vérifications
+       let villeApres = construit ville zone
        in if post_construit ville zone villeApres then
-           villeApres  -- Retourne la ville modifiée si la postcondition est validée
-       else trace ("Postcondition failed for zone: " ++ show zone) ville  -- Affiche un message d'erreur si la postcondition échoue
-    else trace ("Precondition failed for zone: " ++ show zone) ville  -- Affiche un message d'erreur si la précondition échoue
-
---sans les pre/posts pck bug
-addZone zone ville = construit ville zone
+           villeApres  
+       else trace ("Postcondition failed for zone: " ++ show zone) ville  
+    else trace ("Precondition failed for zone: " ++ show zone) ville 
 
 
 
@@ -559,7 +548,7 @@ invariantAddBuildingToZone argent newBuilding zoneId ville (newVille, newArgent)
 
 
 
--- Helper function to add a building to the appropriate zone type
+-- Fonction auxiliaire pour rajouter un batiment à la liste de batiment d'une zone
 updateZoneWithBuilding :: Batiment -> Zone -> Zone
 updateZoneWithBuilding  newBuilding (ZR forme bats) = ZR forme (newBuilding : bats)
 updateZoneWithBuilding  newBuilding (ZI forme bats) = ZI forme (newBuilding : bats)
@@ -575,28 +564,6 @@ getZones (V vizones _) =
         step zone acc = acc ++ [zone]
 
 
-{-
-attribuerLogement :: Citoyen -> BatId -> Ville -> Ville
-attribuerLogement citoyen batId ville = case Map.lookup batId ville of
-    Just (Cabane forme coord capacite citIds) ->
-        if length citIds < capacite
-        then Map.insert batId (Cabane forme coord capacite (citoyenId citoyen : citIds)) ville
-        else ville
-    Just (Atelier forme coord capacite citIds) ->
-        if length citIds < capacite
-        then Map.insert batId (Atelier forme coord capacite (citoyenId citoyen : citIds)) ville
-        else ville
-    Just (Epicerie forme coord capacite citIds) ->
-        if length citIds < capacite
-        then Map.insert batId (Epicerie forme coord capacite (citoyenId citoyen : citIds)) ville
-        else ville
-    Just (Commissariat _ _) ->
-        error "Commissariats cannot house citizens"
-    Nothing ->
-        error "Batiment not found"
-
-        -}
--- TODO : tous les citoyens ont une résidence ?
 
 
 createInitialVille :: Ville
@@ -605,7 +572,7 @@ createInitialVille = V {
        --(ZoneId 1, Route (Rectangle (C 0 0) 50 400))
       --  ,(ZoneId 2, Route (Rectangle (C 50 200) 100 50))
     ],
-    viCit = Map.empty  -- Assuming there are no citizens initially or define some if needed
+    viCit = Map.empty 
 }
 
 
@@ -617,11 +584,14 @@ getZoneIdFromCoord coord ville = Map.foldrWithKey findZoneId Nothing (viZones vi
                               then Just zid 
                               else acc
 
+
+-- Au départ c'était pour l'impot sur revenu mais comme on taxe loyer et les lieux de taff c'est inutile imo
 sommeArgentCitoyens :: Ville -> Int
-sommeArgentCitoyens ville = sum [argent | citoyen <- Map.elems (viCit ville), let argent= getCitoyenMoney citoyen]
+sommeArgentCitoyens ville = foldr (\citoyen acc -> acc + getCitoyenMoney citoyen) 0 (Map.elems (viCit ville))
   where
+    getCitoyenMoney :: Citoyen -> Int
     getCitoyenMoney (Immigrant _ (m, _, _) _) = m
-    getCitoyenMoney (Habitant _ (m, _, _) (_,_,_) _) = m
+    getCitoyenMoney (Habitant _ (m, _, _) (_, _, _) _) = m
     getCitoyenMoney _ = 0
 
 calculateMoney :: Ville -> Int
@@ -631,42 +601,13 @@ calculateMoney ville = foldr (+) 0 $ map moneyFromZone (Map.elems $ viZones vill
 moneyFromZone :: Zone -> Int
 moneyFromZone zone = sum $ map moneyFromBuilding (buildingsFromZone zone)
 
+-- Calculer les impots/loyers
 moneyFromBuilding :: Batiment -> Int
-moneyFromBuilding (Epicerie _ _ _  workers _) = 30 * length workers
-moneyFromBuilding (Cabane _ _ _ n _) = 20 * length n
-moneyFromBuilding (Atelier _ _ _ workers n) = 30 * length workers
-moneyFromBuilding _ = 0  -- Pour tous les autres types ou formes non gérées
+moneyFromBuilding (Epicerie _ _ _   workers _) = 30 * length workers
+moneyFromBuilding (Cabane  _ _ _ n _ ) = 20 * length n
+moneyFromBuilding (Atelier _ _ _  workers _) = 30 * length workers
+moneyFromBuilding _ = 0 
 
-
-
-{-    
-addImmigrantToCabane :: CitId -> BatId -> Ville -> Maybe Ville
-addImmigrantToCabane citId batId ville =
-    case Map.lookup citId (viCit ville) of
-        Just (Immigrant coord info occupation) ->
-            case findCabane batId ville of
-                Just (Cabane forme cabCoord capacite residents batId) | length residents < capacite ->
-                    case (findNearestRoute coord ville, findNearestRoute cabCoord ville) of
-                        (Just startRoute, Just endRoute) ->
-                            let startCoord = moveToRoute coord startRoute
-                                endCoord = moveToRoute cabCoord endRoute
-                            in case aStar startCoord endCoord ville of
-                                Just path ->
-                                    let newResidents = residents ++ [citId]
-                                        updatedCabane = Cabane forme cabCoord capacite newResidents batId
-                                        newVille = updateVilleWithCabane batId updatedCabane ville
-                                        fullPath = [startCoord] ++ path ++ [endCoord, cabCoord] -- ajout des déplacements directs
-                                        _ = trace ("startPoint: " ++ show startCoord) ()  -- Afficher le chemin complet
-
-                                        _ = trace ("fullPath: " ++ show fullPath) ()  -- Afficher le chemin complet
-                                        newCitoyen = Habitant coord info (batId, Nothing, Nothing) (SeDeplaceVers fullPath)
-                                        updatedCitoyens = Map.insert citId newCitoyen (viCit ville)
-                                    in Just newVille { viCit = updatedCitoyens }
-                                Nothing -> trace "No path found" Nothing
-                        _ -> trace "Route not found" Nothing -- Une des routes n'a pas été trouvée
-                _ -> trace "Cabane is full or not found" Nothing -- La cabane est pleine ou non trouvée
-        _ -> trace "Immigrant not found" Nothing -- Immigrant non trouvé
--}
 
 
 addImmigrantToCabane :: CitId -> BatId -> Ville -> Maybe Ville
@@ -683,6 +624,8 @@ addImmigrantToCabane citId batId ville =
                     in Just newVille { viCit = updatedCitoyens }
                 _ -> trace "Cabane is full or not found" Nothing
         _ -> trace "Immigrant not found" Nothing
+
+
 {-Conditions addImmigrantToCabane-}
 
 preconditionAddImmigrantToCabane :: CitId -> BatId -> Ville -> Bool
@@ -748,12 +691,15 @@ addImmigrants :: Int -> Ville -> CitId -> (Ville, CitId)
 addImmigrants count ville (CitId startId) =
     let existingImmigrants = Map.size $ Map.filter isImmigrant (viCit ville)
     in if existingImmigrants == 0
-       then let newCitizens = [Immigrant (C 0 0) (200, 0, 0) Chomage | _ <- [1..count]]
+       then let newCitizens = [Immigrant (C 0 0) (200, 400, 400) Chomage | _ <- [1..count]]
                 newIds = [CitId (startId + i) | i <- [1..count]]
                 updatedMap = foldl (\acc (cit, CitId id) -> Map.insert (CitId id) cit acc) (viCit ville) (zip newCitizens newIds)
                 newCitId = CitId (startId + count)
             in (ville { viCit = updatedMap }, newCitId)
        else (ville, CitId startId)
+
+
+
 {-Invariant addImmigrant-}
 preconditionAddImmigrants :: Int -> Ville -> CitId -> Bool
 preconditionAddImmigrants _ ville _ = 
@@ -805,6 +751,8 @@ isRoute :: Zone -> Bool
 isRoute (Route _) = True
 isRoute _ = False
 
+
+--Debut Aide CHATGPT pour A* en vain... 
 
 moveToRoute :: Coord -> Forme -> Coord
 moveToRoute (C x y) (HSegment (C rx ry) length) = C rx y -- Se déplace horizontalement vers la route
@@ -998,8 +946,11 @@ findNearestPointOnEndRoute (C x y) routeForm =
 
 
 
--- fin A*
---Mise à jour des citoyens en simulant un roulement : travail -> dort/course -> travail, les chomeurs font rien 
+-- fin A* et Chat GPT
+
+
+--Mise à jour des citoyens en simulant un roulement : travail -> dort/course -> travail, les chomeurs font rien mais leurs fatigue/faim diminuent
+--jusqu'à qu'ils devennient des emigrant :(
 
 updateCitizens :: Ville -> Ville
 updateCitizens ville@(V vizones vicit) = 
@@ -1010,7 +961,9 @@ updateCitizens ville@(V vizones vicit) =
             Travaille ->updateTravail ville citoyen
             Dors -> updateDormir ville citoyen
             FaisLesCourses -> updateFaisLesCourses ville citoyen
-            _ ->  citoyen
+            Chomage->  updateChomage ville citoyen
+            _ -> citoyen -- se deplace vers n'est jamais utilisé dans le projet faute de A*
+
 
 
 
@@ -1061,8 +1014,8 @@ invariantUpdateTravail _ = False
 
 findBuilding :: BatId -> Ville -> Maybe Coord
 findBuilding batId ville = 
-    let buildings = getAllBuildings ville
-        foundBuilding = find (\b -> getBatId b == batId) buildings
+    let buildings = getAllBuildings ville in
+    let foundBuilding = find (\b -> getBatId b == batId) buildings
     in getEntry <$> foundBuilding
 
 
@@ -1078,27 +1031,22 @@ updateDormir ville citoyen@(Habitant coord (argent, fatigue, faim) (maison, trav
             Nothing -> trace ("Fatigue: " ++ show fatigue ++ ", No work assigned") citoyen
 updateDormir _ citoyen = citoyen
 
+-- Fonction pour modifier la faim et la fatigue d'un citoyen
+modifierFaimEtFatigue :: Citoyen -> Int -> Int -> Citoyen
+modifierFaimEtFatigue citoyen deltaFaim deltaFatigue = 
+    let citoyenModifie = case citoyen of
+            Immigrant coord (argent, fatigue, faim) occupation ->
+                Immigrant coord (argent, fatigue + deltaFatigue, faim + deltaFaim) occupation
+            Habitant coord (argent, fatigue, faim) logement occupation ->
+                Habitant coord (argent, fatigue + deltaFatigue, faim + deltaFaim) logement occupation
+            _ -> citoyen
+    in trace (show citoyenModifie) citoyenModifie
+-- Fonction pour mettre à jour un citoyen en chômage
+updateChomage :: Ville -> Citoyen -> Citoyen
+updateChomage ville citoyen = 
+    let citoyenModifie = modifierFaimEtFatigue citoyen (-1) (-1)
+    in citoyenModifie
 
-{-COnditions pour updateDormir
-preconditionUpdateDormir :: Ville -> Citoyen -> Bool
-preconditionUpdateDormir _ (Habitant _ _ (Just _, _, _) _) = True
-preconditionUpdateDormir _ _ = False
-
-
-postconditionUpdateDormir :: Ville -> Citoyen -> Citoyen -> Bool
-postconditionUpdateDormir ville citoyen@(Habitant coord (argent, fatigue, faim) (maison, Just travail, courses) occupation) updatedCitoyen
-    | fatigue < 200 =
-        let (Habitant newCoord (newArgent, newFatigue, newFaim) newHabitation newOccupation) = updatedCitoyen
-        in newFatigue == fatigue + 1 && newOccupation == Dors && newCoord == coord && newArgent == argent && newFaim == faim && newHabitation == (maison, Just travail, courses)
-    | otherwise =
-        case findBuilding (fromJust travail) ville of
-            Just travailCoord -> 
-                let (Habitant newCoord (newArgent, newFatigue, newFaim) newHabitation newOccupation) = updatedCitoyen
-                in newCoord == travailCoord && newOccupation == Travaille
-            Nothing -> False
-postconditionUpdateDormir _ _ _ = False
-
--}
 
   
 
@@ -1154,6 +1102,7 @@ addCitizenToBuilding citId building =
 
 findBuildingById :: BatId -> [Batiment] -> Maybe Batiment
 findBuildingById batId = find (\b -> getBatId b ==  batId)  
+
 -- Trouver un habitant sans travail
 findFirstHabitantId :: Ville -> Maybe CitId
 findFirstHabitantId ville = 
@@ -1164,8 +1113,7 @@ isUnemployedHabitant (Habitant _ _ (_, Nothing, _) _) = True
 isUnemployedHabitant _ = False
 
 
---assigner un endroit où se nourrir
--- Fonction pour assigner une épicerie à un habitant
+-- Fonction pour assigner une épicerie à un habitant pour qu'il aille manger
 assignGroceryToHabitant :: CitId -> BatId -> Ville -> Maybe Ville
 assignGroceryToHabitant citId batId ville = 
     case Map.lookup citId (viCit ville) of
@@ -1263,10 +1211,51 @@ addCable zoneCable ville =
            in (updateWithElectricity updatedVille)
        else ville
 
-updateZoneWithBuildings :: Zone -> [Batiment] -> Zone
-updateZoneWithBuildings (ZR forme _) buildings = ZR forme buildings
-updateZoneWithBuildings (ZI forme _) buildings = ZI forme buildings
-updateZoneWithBuildings (ZC forme _) buildings = ZC forme buildings
+-- Précondition pour ajouter un câble
+preconditionAddCable :: Zone -> Ville -> Bool
+preconditionAddCable zoneCable ville =
+    let zones = Map.elems (viZones ville)
+        validAdjacentZone zone = case zone of
+            ZE forme -> adjacentes forme (zoneForme zoneCable)
+            Cable forme -> adjacentes forme (zoneForme zoneCable)
+            _ -> False
+    in any validAdjacentZone zones
+
+-- Postcondition pour ajouter un câble
+postconditionAddCable :: Zone -> Ville -> Ville -> Bool
+postconditionAddCable zoneCable oldVille newVille =
+    let newZones = viZones newVille
+        newCables = filter (isCable . snd) (Map.toList newZones)
+        oldCables = filter (isCable . snd) (Map.toList (viZones oldVille))
+        newBuildings = concatMap (buildingsFromZone . snd) (Map.toList newZones)
+        oldBuildings = concatMap (buildingsFromZone . snd) (Map.toList (viZones oldVille))
+    in length newCables == length oldCables + 1 &&
+       all (\(Cabane _ _ capacite _ _) -> capacite >= 10) (filter isCabane newBuildings) &&
+       all (\(Atelier _ _ capacite _ _) -> capacite >= 4) (filter isAtelier newBuildings) &&
+       all (\(Epicerie _ _ capacite _ _) -> capacite >= 4) (filter isEpicerie newBuildings)
+
+
+isCable :: Zone -> Bool
+isCable (Cable _) =True
+isCable _ = False
+
+
+isEpicerie :: Batiment -> Bool
+isEpicerie (Epicerie _ _ _ _ _) =True
+isEpicerie _ = False
+
+
+isAtelier :: Batiment -> Bool
+isAtelier (Atelier _ _ _ _ _) =True
+isAtelier _ = False
+-- Invariant pour ajouter un câble
+invariantAddCable :: Zone -> Ville -> Ville -> Bool
+invariantAddCable _ oldVille newVille =
+    let oldZones = viZones oldVille
+        newZones = viZones newVille
+    in Map.keys oldZones == Map.keys newZones && Map.keys (viCit oldVille) == Map.keys (viCit newVille)
+
+
 
 -- Fonction pour calculer le coût de maintient de la ville 
 cityCost :: Ville -> Int
@@ -1286,9 +1275,9 @@ pollutionScore:: Ville -> Int
 pollutionScore ville = 
      Map.foldr step 0 (viZones ville) 
     where
-        step (ZE _) acc = acc + 20 
+        step (ZE _) acc = acc +20 
         step (Cable _) acc= 5 + acc
-        step (Eau _) acc = acc - 20 
+        step (Eau _)acc = acc + 20 
         step _ acc= acc
 
 
@@ -1305,14 +1294,32 @@ safetyScore ville =
         buildingsNearCommissariatsCount = countBuildingsNearCommissariats ville
     in buildingsNearCommissariatsCount * 10 - unemployedCount * 20
 
+--precond
+preconditionSafetyScore :: Ville -> Bool
+preconditionSafetyScore ville = not (Map.null (viZones ville)) && not (Map.null (viCit ville))
+
+
+--post
+postconditionSafetyScore :: Ville -> Int -> Bool
+postconditionSafetyScore ville score = score == buildingsNearCommissariatsCount * 10 - unemployedCount * 20
+  where
+    unemployedCount = countUnemployedCitizens ville
+    buildingsNearCommissariatsCount = countBuildingsNearCommissariats ville
+
+--invariant
+invariantSafetyScore :: Ville -> Bool
+invariantSafetyScore ville = buildingsNearCommissariatsCount >= 0 && unemployedCount >= 0
+  where
+    unemployedCount = countUnemployedCitizens ville
+    buildingsNearCommissariatsCount = countBuildingsNearCommissariats ville
+
 
 countUnemployedCitizens :: Ville -> Int
 countUnemployedCitizens ville =
     length $ filter isUnemployed (Map.elems (viCit ville))
   where
     isUnemployed (Habitant _ _ _ Chomage) = True
-    isUnemployed _ = False
-
+    isUnemployed citoyen = isImmigrant citoyen || isEmigrant citoyen
 
 countBuildingsNearCommissariats :: Ville -> Int
 countBuildingsNearCommissariats ville =
@@ -1333,10 +1340,10 @@ checkAndTransformCitizens ville =
     ville { viCit = Map.map checkCitizen (viCit ville) }
   where
     checkCitizen :: Citoyen -> Citoyen
-    checkCitizen citoyen@(Immigrant _ (faim, _, sommeil) _) 
+    checkCitizen citoyen@(Immigrant _ (argent, faim, sommeil) _) 
         | faim <= 0 || sommeil <= 0 = transformToEmigrant citoyen
         | otherwise = citoyen
-    checkCitizen citoyen@(Habitant _ (faim, _, sommeil) _ _) 
+    checkCitizen citoyen@(Habitant _ (argent, faim, sommeil) _ _) 
         | faim <= 0 || sommeil <= 0 = transformToEmigrant citoyen
         | otherwise = citoyen
     checkCitizen citoyen = citoyen 
@@ -1345,3 +1352,30 @@ transformToEmigrant :: Citoyen -> Citoyen
 transformToEmigrant (Immigrant coord _ _) = Emigrant coord Chomage
 transformToEmigrant (Habitant coord _ _ _) = Emigrant coord Chomage
 transformToEmigrant citoyen = citoyen  -- Juste au cas où, même si cela ne devrait pas arriver
+
+-- Précondition pour vérifier et transformer les citoyens
+preconditionCheckAndTransformCitizens :: Ville -> Bool
+preconditionCheckAndTransformCitizens ville = not (Map.null (viCit ville))
+
+-- Postcondition pour vérifier et transformer les citoyens
+postconditionCheckAndTransformCitizens :: Ville -> Ville -> Bool
+postconditionCheckAndTransformCitizens oldVille newVille =
+    all checkCitizenTransformed (Map.toList (viCit newVille))
+  where
+    checkCitizenTransformed (citId, newCitizen) =
+        case Map.lookup citId (viCit oldVille) of
+            Just oldCitizen -> 
+                if isHungryOrSleepy oldCitizen 
+                then isEmigrant newCitizen 
+                else newCitizen == oldCitizen
+            Nothing -> False
+
+    isHungryOrSleepy (Immigrant _ (_, faim, sommeil) _) = faim <= 0 || sommeil <= 0
+    isHungryOrSleepy (Habitant _ (_, faim, sommeil) _ _) = faim <= 0 || sommeil <= 0
+    isHungryOrSleepy _ = False
+
+
+-- Invariant pour vérifier et transformer les citoyens
+invariantCheckAndTransformCitizens :: Ville -> Ville -> Bool
+invariantCheckAndTransformCitizens oldVille newVille =
+    Map.keys (viZones oldVille) == Map.keys (viZones newVille)

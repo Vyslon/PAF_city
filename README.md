@@ -1,5 +1,6 @@
 # minijeu
 
+lien du github :https://github.com/Vyslon/PAF_city
 Mini-jeu en Haskell-SDL2 à compléter.
 
 ## Compilation
