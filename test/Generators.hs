@@ -11,8 +11,6 @@ import qualified Data.Map as Map
 import Data.IORef
 import System.IO.Unsafe (unsafePerformIO)
 
---import Distribution.Compat.Prelude (undefined)
-
 
 buildingCoord :: Batiment -> Coord
 buildingCoord (Cabane _ coord _ _ _) = coord
@@ -212,8 +210,6 @@ genBatiment maxX maxY zone = case zone of
     (Admin forme batiments) -> genCommissariat maxX maxY (Admin forme batiments)
     _ -> error "On essaie de générer un batiment dans une zone qui n'en possède pas"
 
--- TODO :  updateZoneWithBuilding :: Zone -> Batiment -> Zone
-
 generateBuildings :: (Int -> Int -> Zone -> Gen (Maybe Batiment)) -> Int -> Int -> Zone -> Int -> Gen Zone
 generateBuildings genBuilding maxX maxY zone num = foldM step zone [0..num-1]
     where step zoneCurr _  = do
@@ -264,8 +260,8 @@ genVille maxX maxY = do
     initialCabane <- genCabane maxX maxY (ZR (Rectangle (C 0 0) maxX maxY) [])
     let initialZone = case initialCabane of
             Just cabane -> updateZoneWithBuilding cabane (ZR (Rectangle (C 0 0) maxX maxY) []) 
-            Nothing -> ZR (Rectangle (C 0 0) maxX maxY) []  -- Fallback in case no cabane is generated
-    zones <- generateZones initialZone 10  -- Adjust the number of zones as needed
+            Nothing -> ZR (Rectangle (C 0 0) maxX maxY) []
+    zones <- generateZones initialZone 10
     return $ V (Map.fromList (zip (map ZoneId [0..]) zones)) Map.empty
 
 property_inv_genVille :: Property
